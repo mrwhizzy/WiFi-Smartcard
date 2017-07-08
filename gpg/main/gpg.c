@@ -109,6 +109,7 @@ static void taskConnect(void *pvParameters) {
     char recvBuf[1024];
     unsigned char input[16];
     struct sockaddr_in serv_addr;
+    
     if (initialize()){
         goto exit;
     }

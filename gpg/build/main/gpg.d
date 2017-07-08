@@ -1,4 +1,4 @@
-gpg.o: /Users/CMelas/esp/gpg/main/./gpg.c \
+gpg.o: /Users/CMelas/esp/cxm661/gpg/main/./gpg.c \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/ieeefp.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/_ansi.h \
@@ -25,7 +25,7 @@ gpg.o: /Users/CMelas/esp/gpg/main/./gpg.c \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/hal.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core.h \
@@ -130,8 +130,8 @@ gpg.o: /Users/CMelas/esp/gpg/main/./gpg.c \
  /Users/CMelas/esp/esp-idf/components/wear_levelling/include/wear_levelling.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
- /Users/CMelas/esp/gpg/main/./netlist.h \
- /Users/CMelas/esp/gpg/main/./libAPDU.h \
+ /Users/CMelas/esp/cxm661/gpg/main/./netlist.h \
+ /Users/CMelas/esp/cxm661/gpg/main/./libAPDU.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/ctr_drbg.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/aes.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/port/include/mbedtls/esp_config.h \
@@ -200,7 +200,7 @@ gpg.o: /Users/CMelas/esp/gpg/main/./gpg.c \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 
@@ -410,9 +410,9 @@ gpg.o: /Users/CMelas/esp/gpg/main/./gpg.c \
 
 /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
 
-/Users/CMelas/esp/gpg/main/./netlist.h:
+/Users/CMelas/esp/cxm661/gpg/main/./netlist.h:
 
-/Users/CMelas/esp/gpg/main/./libAPDU.h:
+/Users/CMelas/esp/cxm661/gpg/main/./libAPDU.h:
 
 /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/ctr_drbg.h:
 
