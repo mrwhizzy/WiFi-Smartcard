@@ -32,6 +32,7 @@ static const uint8_t VERSION[3] = { 0x01, 0x00, 0x12 };
 #define SW_NO_ERROR 0x9000
 #define SW_BYTES_REMAINING_00 0x6100
 #define SW_WARNING_STATE_UNCHANGED 0x6200
+#define SW_WRONG_LENGTH 0x6700
 #define SW_SECURITY_STATUS_NOT_SATISFIED 0x6982
 //#define SW_FILE_INVALID 0x6983    Openpgp defines 6983 as AUTHENTICATION BLOCKED
 #define SW_AUTHENTICATION_BLOCKED 0x6983
@@ -1171,6 +1172,248 @@ uint16_t getData(short tag, uint16_t* ret) {
 }
 
 /**
+ * Provide the PUT DATA command (INS DA)
+ * 
+ * Write the data specified using tag.
+ * 
+ * Before using this method PW3 has to be verified.
+ * 
+ * @param apdu
+ * @param tag
+ *            Tag of the requested data
+ */
+uint16_t putData(uint16_t tag) {
+    if((tag == (uint16_t) 0x0101) || (tag == (uint16_t) 0x0103)) {
+        // Special case for private use DO's 1 and 3: these can be written if
+        // PW1 is verified with mode 82. All others require PW3 verification.
+        if (!((pw1.validated == 1) && pw1_modes[PW1_MODE_NO82])) {
+            return SW_SECURITY_STATUS_NOT_SATISFIED;
+        }
+
+        if (in_received > PRIVATE_DO_MAX_LENGTH) {
+            return SW_WRONG_LENGTH;
+        }
+
+        switch (tag) {
+        // 0101 - Private Use DO 1
+        case (uint16_t) 0x0101:
+            //JCSystem.beginTransaction();
+            private_use_do_1_length = in_received;
+            memcpy(private_use_do_1, buffer, in_received);
+            return SW_NO_ERROR;
+            //JCSystem.commitTransaction();
+
+        // 0103 - Private Use DO 3
+        case (uint16_t) 0x0103:
+            //JCSystem.beginTransaction();
+            private_use_do_3_length = in_received;
+            memcpy(private_use_do_3, buffer, in_received);
+            return SW_NO_ERROR;
+            //JCSystem.commitTransaction();
+        }
+    }
+
+    if (pw3.validated == 0) {
+        return SW_SECURITY_STATUS_NOT_SATISFIED;
+    }
+
+    switch (tag) {
+    // 5B - Name
+    case (uint16_t) 0x005B:
+        if (in_received > NAME_MAX_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(name, buffer, in_received);
+        name_length = in_received;
+        return SW_NO_ERROR;
+        //JCSystem.commitTransaction();
+
+    // 5E - Login data
+    case (uint16_t) 0x005E:
+        if (in_received > LOGINDATA_MAX_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(loginData, buffer, in_received);
+        loginData_length = in_received;
+        return SW_NO_ERROR;
+        //JCSystem.commitTransaction();
+
+    // 5F2D - Language preferences
+    case (uint16_t) 0x5F2D:
+        if (in_received > LANG_MAX_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(lang, buffer, in_received);
+        lang_length = in_received;
+        return SW_NO_ERROR;
+        //JCSystem.commitTransaction();
+
+    // 5F35 - Sex
+    case (uint16_t) 0x5F35:
+        if (in_received != 1) {
+            return SW_WRONG_DATA;
+        }
+
+        // Check for valid values
+        if (buffer[0] != (uint8_t) 0x31 && buffer[0] != (uint8_t) 0x32
+                && buffer[0] != (uint8_t) 0x39) {
+            return SW_WRONG_DATA;
+        }
+        sex = buffer[0];
+        return SW_NO_ERROR;
+
+    // 5F50 - URL
+    case (uint16_t) 0x5F50:
+        if (in_received > URL_MAX_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(url, buffer, in_received);
+        url_length = in_received;
+        return SW_NO_ERROR;
+        //JCSystem.commitTransaction();
+
+    // 7F21 - Cardholder certificate
+    case (uint16_t) 0x7F21:
+        if (in_received > CERT_MAX_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        memcpy(cert, buffer, in_received);
+        cert_length = in_received;
+        return SW_NO_ERROR;
+
+    // C4 - PW Status Bytes
+    case (uint16_t) 0x00C4:
+        if (in_received != 1) {
+            return SW_WRONG_DATA;
+        }
+        // Check for valid values
+        if (buffer[0] != (uint8_t) 0x00 && buffer[0] != (uint8_t) 0x01) {
+            return SW_WRONG_DATA;
+        }
+        pw1_status = buffer[0];
+        return SW_NO_ERROR;
+
+    // C7 - Fingerprint signature key
+    case (uint16_t) 0x00C7:
+        if (in_received != FP_SIZE) {   // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;       // Method setFingerprint performs limit checking
+        }
+        memcpy(sigFP, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // C8 - Fingerprint decryption key
+    case (uint16_t) 0x00C8:
+        if (in_received != FP_SIZE) {   // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;       // Method setFingerprint performs limit checking
+        }
+        memcpy(decFP, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // C9 - Fingerprint authentication key
+    case (uint16_t) 0x00C9:
+        if (in_received != FP_SIZE) {   // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;       // Method setFingerprint performs limit checking
+        }
+        memcpy(authFP, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // CA - Fingerprint Certification Authority 1
+    case (uint16_t) 0x00CA:
+        if (in_received != FP_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        memcpy(ca1_fp, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // CB - Fingerprint Certification Authority 2
+    case (uint16_t) 0x00CB:
+        if (in_received != FP_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        memcpy(ca2_fp, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // CC - Fingerprint Certification Authority 3
+    case (uint16_t) 0x00CC:
+        if (in_received != FP_LENGTH) {
+            return SW_WRONG_DATA;
+        }
+        memcpy(ca3_fp, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // CE - Signature key generation date/time
+    case (uint16_t) 0x00CE:
+        if (in_received != 4) {     // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;   // Method setTime performs limit checking
+        }
+        memcpy(sigTime, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // CF - Decryption key generation date/time
+    case (uint16_t) 0x00CF:
+        if (in_received != 4) {     // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;   // Method setTime performs limit checking
+        }
+        memcpy(decTime, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // D0 - Authentication key generation date/time
+    case (short) 0x00D0:
+        if (in_received != 4) {     // * Redundant check in the Java implementation
+            return SW_WRONG_DATA;   // Method setTime performs limit checking
+        }
+        memcpy(authTime, buffer, in_received);
+        return SW_NO_ERROR;
+
+    // D3 - Resetting Code
+    case (uint16_t) 0x00D3:
+        if (in_received == 0) {
+            rc_length = 0;
+        } else if (in_received >= RC_MIN_LENGTH
+                && in_received <= RC_MAX_LENGTH) {
+            //JCSystem.beginTransaction();
+            updatePIN(&rc, buffer, 0, (uint8_t) in_received);
+            rc_length = (uint8_t) in_received;
+            rc.validated = 0;
+            rc.remaining = rc.limit;
+            //JCSystem.commitTransaction();
+        } else {
+            return SW_WRONG_DATA;
+        }
+        return SW_NO_ERROR;
+
+    // 0102 - Private Use DO 2
+    case 0x0102:
+        if (in_received > PRIVATE_DO_MAX_LENGTH) {
+            return SW_WRONG_LENGTH;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(private_use_do_2, buffer, in_received);
+        private_use_do_2_length = in_received;
+        //JCSystem.commitTransaction();
+        return SW_NO_ERROR;
+
+    // 0104 - Private Use DO 4
+    case 0x0104:
+        if (in_received > PRIVATE_DO_MAX_LENGTH) {
+            return SW_WRONG_LENGTH;
+        }
+        //JCSystem.beginTransaction();
+        memcpy(private_use_do_4, buffer, in_received);
+        private_use_do_4_length = in_received;
+        //JCSystem.commitTransaction();
+        return SW_NO_ERROR;
+
+    default:
+        return SW_RECORD_NOT_FOUND;
+    }
+}
+
+/**
  * Send next block of data in buffer. Used for sending data in <buffer>
  * 
  * @param apdu
@@ -1312,10 +1555,9 @@ uint8_t initialize() {
 // NOT OK
 void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
-    uint16_t status = 0x9000;           // No error
+    uint16_t status = SW_NO_ERROR;
     uint16_t len = 0;
     uint8_t ret;
-    //apdu.Le = 0;
 
     if (apdu.INS == 0xA4) {
             // Reset PW1 modes
