@@ -22,6 +22,10 @@ static const uint8_t HISTORICAL[15] = { 0x00, 0x73, 0x00, 0x00, \
                     (uint8_t) 0x80, 0x00, 0x00, 0x00, \
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
+static const uint8_t AID[16] = { (uint8_t) 0xD2, 0x76, 0x00, 0x01, \
+                    0x24, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00,  \
+                    0x00, 0x00, 0x01, 0x00, 0x00 };
+
 // returned by vendor specific command f1
 static const uint8_t VERSION[3] = { 0x01, 0x00, 0x12 };
 
@@ -57,7 +61,6 @@ static const uint8_t EXTENDED_CAP[10] = { (uint8_t) 0xF8, 0x00, \
                     0x00, (uint8_t) 0xFF, 0x00, (uint8_t) 0xFF };
 
 #define RESPONSE_MAX_LENGTH 255
-#define RESPONSE_SM_MAX_LENGTH 231
 #define CHALLENGES_MAX_LENGTH 255
 
 #define BUFFER_MAX_LENGTH 1221
@@ -89,8 +92,10 @@ static uint8_t PW3_DEFAULT[8] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
 
 #define KEY_SIZE 2048
 #define KEY_SIZE_BYTES 256
+#define EXPONENT_SIZE 17
 #define EXPONENT_SIZE_BYTES 3
 #define EXPONENT 65537
+#define FP_SIZE 20
 
 uint8_t loginData[LOGINDATA_MAX_LENGTH];
 short int loginData_length;
@@ -129,8 +134,13 @@ typedef struct apdu_t {
     uint16_t P1P2;
     uint16_t Le;        // Check for correct parsing
     uint16_t Lc;        // Check for correct parsing
-    char data[256];     // maybe 128 is enough
+    uint8_t data[256];     // maybe 128 is enough
 } apdu_t;
+
+typedef struct outData {
+    uint16_t length;
+    uint8_t data[RESPONSE_MAX_LENGTH+2];
+} outData;
 
 typedef struct ownerPIN {
     uint8_t remaining;
@@ -154,6 +164,15 @@ uint8_t ds_counter[3];
 
 mbedtls_rsa_context sigKey, decKey, authKey;
 uint8_t isSigEmpty, isDecEmpty, isAuthEmpty;
+uint8_t sigAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
+uint8_t sigFP[FP_SIZE];
+uint8_t sigTime[4] = { 0x00, 0x00, 0x00, 0x00 };
+uint8_t decAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
+uint8_t decFP[FP_SIZE];
+uint8_t decTime[4] = { 0x00, 0x00, 0x00, 0x00 };
+uint8_t authAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
+uint8_t authFP[FP_SIZE];
+uint8_t authTime[4] = { 0x00, 0x00, 0x00, 0x00 };
 
 uint8_t ca1_fp[FP_LENGTH];
 uint8_t ca2_fp[FP_LENGTH];
@@ -185,7 +204,7 @@ apdu_t parseAPDU(char* recvBuf, int n){
     newAPDU.Lc = 0;
     newAPDU.Le = 0;
     bzero(newAPDU.data, sizeof(newAPDU.data));
-    
+
     newAPDU.CLA = recvBuf[0];
     newAPDU.INS = recvBuf[1];
     newAPDU.P1 = recvBuf[2];
@@ -197,14 +216,13 @@ apdu_t parseAPDU(char* recvBuf, int n){
         newAPDU.Lc = (uint16_t) (0xFF & recvBuf[4]);
         if (n > 5 + newAPDU.Lc) {   // Lc | Data | Le
             newAPDU.Le = (uint16_t) (0xFF & recvBuf[5+newAPDU.Lc]);
-            strncpy(newAPDU.data, (recvBuf+5), strlen(recvBuf-6));
+            memcpy(newAPDU.data, (recvBuf+5), n-6);
         } else {                // Lc | Data
-            strcpy(newAPDU.data, (recvBuf+5));
+            memcpy(newAPDU.data, (recvBuf+5), n-5);
         }
     }
     return newAPDU;
 }
-
 
 /**
  * Return the key of the type requested:
@@ -216,7 +234,6 @@ apdu_t parseAPDU(char* recvBuf, int n){
  *            Type of key to be returned
  * @return Key of requested type
  */
-// SHOULD BE FINE
 mbedtls_rsa_context getKey(uint8_t type) {
     static const char *TAG = "getKey";
     mbedtls_rsa_context key = sigKey;
@@ -377,7 +394,7 @@ uint8_t checkPIN(ownerPIN* pw, uint8_t* pin, uint8_t length) {
     pw->remaining = (uint8_t) (pw->remaining - 1);
     pw->validated = 0;
 
-    if (pw->value[0] != length) {   // OOPS, timing attack vulnerability spotted! :D
+    if (pw->value[0] != length) {   // * OOPS, timing attack vulnerability spotted! :D
         return 0;                   // At least you can infer the length of the PIN
     }
 
@@ -689,7 +706,7 @@ uint16_t computeDigitalSignature(uint16_t* length) {
 
     uint8_t* outOffset = buffer + in_received;
     if(mbedtls_rsa_pkcs1_encrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg, 
-            MBEDTLS_RSA_PUBLIC, in_received, buffer, outOffset) != 0) {
+            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset) != 0) {
         return SW_UNKNOWN;  // Again, not really unknown...
     }
 
@@ -699,7 +716,6 @@ uint16_t computeDigitalSignature(uint16_t* length) {
     len = (mbedtls_mpi_bitlen(&sigKey.N) + 7) >> 3;
     memcpy(buffer, outOffset, len);  // * Rest of buffer is non-empty
     (*length) = len;
-
     return SW_NO_ERROR;
 }
 
@@ -733,7 +749,6 @@ uint16_t decipher(uint16_t* length) {
         return SW_UNKNOWN;  // Same as above
     }
 
-
     // Start at offset 1 to omit padding indicator byte
     uint8_t* inOffset = buffer + 1;
     uint8_t* outOffset = buffer + in_received;
@@ -751,7 +766,50 @@ uint16_t decipher(uint16_t* length) {
 
     memcpy(buffer, outOffset, len);  // * Rest of buffer is non-empty, again
     (*length) = len;
+    return SW_NO_ERROR;
+}
 
+/**
+ * Provide the INTERNAL AUTHENTICATE command (INS 88)
+ * 
+ * Sign the data provided using the key for authentication. Before using
+ * this method PW1 has to be verified with mode No. 82.
+ * 
+ * @param length Length of data written in buffer
+ */
+uint16_t internalAuthenticate(uint16_t* length) {
+    size_t len;
+    if (!((pw1.validated == 1) && pw1_modes[PW1_MODE_NO82])) {
+        return SW_SECURITY_STATUS_NOT_SATISFIED;
+    }
+
+    if (isAuthEmpty) {
+        return SW_REFERENCED_DATA_NOT_FOUND;
+    }
+
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_context entropy;
+    mbedtls_entropy_init(&entropy);
+    const char *pers = "internalAuthenticate";
+
+    if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                        (const unsigned char *) pers, strlen(pers)) != 0) {
+        return SW_UNKNOWN;  // Same as above
+    }
+
+    uint8_t* outOffset = buffer + in_received;
+    if(mbedtls_rsa_pkcs1_encrypt(&authKey, mbedtls_ctr_drbg_random, &ctr_drbg, 
+            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset) != 0) {
+        return SW_UNKNOWN;  // Again, not really unknown...
+    }
+
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+
+    len = (mbedtls_mpi_bitlen(&authKey.N) + 7) >> 3;
+    memcpy(buffer, outOffset, len);  // * Rest of buffer is non-empty
+    (*length) = len;
     return SW_NO_ERROR;
 }
 
@@ -780,7 +838,7 @@ uint16_t sendPublicKey(mbedtls_rsa_context key) {
         buffer[offset++] = (uint8_t) KEY_SIZE_BYTES;
     } else {
         buffer[offset++] = (uint8_t) 0x82;
-        buffer[offset++] = (uint8_t) ((KEY_SIZE_BYTES & 0xFF00) << 8);
+        buffer[offset++] = (uint8_t) (KEY_SIZE_BYTES >> 8);
         buffer[offset++] = (uint8_t) (KEY_SIZE_BYTES & 0x00FF);
     }
 
@@ -795,7 +853,7 @@ uint16_t sendPublicKey(mbedtls_rsa_context key) {
     mbedtls_mpi_write_binary(&key.E, bufOffset, EXPONENT_SIZE_BYTES);
     offset += EXPONENT_SIZE_BYTES;
 
-    buffer[offsetForLength] = (uint8_t) (((offset - offsetForLength - 2) & 0xFF00) << 8);
+    buffer[offsetForLength] = (uint8_t) ((offset - offsetForLength - 2) >> 8);
     buffer[offsetForLength+1] = (uint8_t) ((offset - offsetForLength - 2) & 0x00FF);
 
     return offset;
@@ -817,7 +875,6 @@ uint16_t sendPublicKey(mbedtls_rsa_context key) {
  *            Generate key pair (80) or read public key (81)
  * @return Length of data written in buffer
  */
-// SHOULD BE FINE
 uint16_t genAsymKey(uint8_t mode) {
     static const char* TAG = "genAsymKey";
 
@@ -838,52 +895,82 @@ uint16_t genAsymKey(uint8_t mode) {
     return sendPublicKey(getKey(buffer[0]));
 }
 
+
+/**
+ * Provide the GET CHALLENGE command (INS 84)
+ * 
+ * Generate a random number of the length given in len.
+ * 
+ * @param len Length of the requested challenge
+ * @param length Length of data written in buffer
+ */
+uint16_t getChallenge(uint16_t len, uint16_t* length) {
+    if (len > CHALLENGES_MAX_LENGTH)
+        return SW_WRONG_DATA;
+
+    srand((unsigned int) time(NULL));
+    for (int i = 0; i < len; i++) {
+        buffer[i] = (uint8_t) rand() & 0xFF;
+    }
+
+    (*length) = len;
+    return SW_NO_ERROR;
+}
+
 /**
  * Provide the GET DATA command (INS CA)
  * 
  * Output the data specified with tag.
  * 
- * @param apdu
- * @param tag
- *            Tag of the requested data
+ * @param tag Tag of the requested data
+ * @param ret Length of data written in buffer
  */
-/*uint16_t getData(short tag) {
+uint16_t getData(short tag, uint16_t* ret) {
     uint16_t offset = 0;
-
+    uint8_t* bufOffset;
+        
     switch (tag) {
     // 4F - Application identifier (AID)
     case (uint16_t) 0x004F:
-        return JCSystem.getAID().getBytes(buffer, _0);
+        memcpy(buffer, AID, sizeof(AID));
+        (*ret) = sizeof(AID);
+        return SW_NO_ERROR;
 
     // 5E - Login data
     case (uint16_t) 0x005E:
-        return Util.arrayCopyNonAtomic(loginData, _0, buffer, _0,
-                loginData_length);
+        memcpy(buffer, loginData, loginData_length);
+        (*ret) = loginData_length;
+        return SW_NO_ERROR;
 
     // 5F50 - URL
     case (uint16_t) 0x5F50:
-        return Util.arrayCopyNonAtomic(url, _0, buffer, _0, url_length);
+        memcpy(buffer, url, url_length);
+        (*ret) = url_length;
+        return SW_NO_ERROR;
 
     // 5F52 - Historical bytes
     case (uint16_t) 0x5F52:
-        return Util.arrayCopyNonAtomic(HISTORICAL, _0, buffer, _0,
-                (short)HISTORICAL.length);
+        memcpy(buffer, HISTORICAL, sizeof(HISTORICAL));
+        (*ret) = sizeof(HISTORICAL);
+        return SW_NO_ERROR;
 
     // 65 - Cardholder Related Data
     case (uint16_t) 0x0065:
 
         // 5B - Name
         buffer[offset++] = 0x5B;
-        buffer[offset++] = (byte) name_length;
-        offset = Util.arrayCopyNonAtomic(name, _0, buffer, offset,
-                name_length);
+        buffer[offset++] = (uint8_t) name_length;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, name, name_length);
+        offset += name_length;
 
         // 5F2D - Language
         buffer[offset++] = 0x5F;
         buffer[offset++] = 0x2D;
-        buffer[offset++] = (byte) lang_length;
-        offset = Util.arrayCopyNonAtomic(lang, _0, buffer, offset,
-                lang_length);
+        buffer[offset++] = (uint8_t) lang_length;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, lang, lang_length);
+        offset += lang_length;
 
         // 5F35 - Sex
         buffer[offset++] = 0x5F;
@@ -891,152 +978,259 @@ uint16_t genAsymKey(uint8_t mode) {
         buffer[offset++] = 0x01;
         buffer[offset++] = sex;
 
-        return offset;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 6E - Application Related Data
     case (uint16_t) 0x006E:
 
         // 4F - AID
         buffer[offset++] = 0x4F;
-        byte len = JCSystem.getAID().getBytes(buffer, (short)(offset + 1));
-        buffer[offset++] = len;
-        offset += len;
+        buffer[offset++] = sizeof(AID);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, AID, sizeof(AID));
+        offset += sizeof(AID);
 
         // 5F52 - Historical bytes
         buffer[offset++] = 0x5F;
         buffer[offset++] = 0x52;
-        buffer[offset++] = (byte) HISTORICAL.length;
-        offset = Util.arrayCopyNonAtomic(HISTORICAL, _0, buffer, offset,
-                (short) HISTORICAL.length);
+        buffer[offset++] = (uint8_t) sizeof(HISTORICAL);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, HISTORICAL, sizeof(HISTORICAL));
+        offset += sizeof(HISTORICAL);
 
         // 73 - Discretionary data objects
         buffer[offset++] = 0x73;
-        buffer[offset++] = (byte)0x81; // This field's length will exceed 127 bytes
-        short ddoLengthOffset = offset;
+        buffer[offset++] = (uint8_t) 0x81; // This field's length will exceed 127 bytes
+        uint16_t ddoLengthOffset = offset;
         buffer[offset++] = 0x00; // Placeholder for length byte
 
         // C0 - Extended capabilities
-        buffer[offset++] = (byte) 0xC0;
-        buffer[offset++] = (byte) EXTENDED_CAP.length;
-        offset = Util.arrayCopyNonAtomic(EXTENDED_CAP, _0, buffer, offset,
-                (short) EXTENDED_CAP.length);
+        buffer[offset++] = (uint8_t) 0xC0;
+        buffer[offset++] = (uint8_t) sizeof(EXTENDED_CAP);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, EXTENDED_CAP, sizeof(EXTENDED_CAP));
+        offset += sizeof(EXTENDED_CAP);
 
         // C1 - Algorithm attributes signature
-        buffer[offset++] = (byte) 0xC1;
-        buffer[offset++] = (byte) 0x06;
-        offset = sig_key.getAttributes(buffer, offset);
+        buffer[offset++] = (uint8_t) 0xC1;
+        buffer[offset++] = (uint8_t) 0x06;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, sigAttributes, sizeof(sigAttributes));
+        offset += sizeof(sigAttributes);
 
         // C2 - Algorithm attributes decryption
-        buffer[offset++] = (byte) 0xC2;
-        buffer[offset++] = (byte) 0x06;
-        offset = dec_key.getAttributes(buffer, offset);
+        buffer[offset++] = (uint8_t) 0xC2;
+        buffer[offset++] = (uint8_t) 0x06;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, decAttributes, sizeof(decAttributes));
+        offset += sizeof(decAttributes);
 
         // C3 - Algorithm attributes authentication
-        buffer[offset++] = (byte) 0xC3;
-        buffer[offset++] = (byte) 0x06;
-        offset = auth_key.getAttributes(buffer, offset);
+        buffer[offset++] = (uint8_t) 0xC3;
+        buffer[offset++] = (uint8_t) 0x06;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, authAttributes, sizeof(authAttributes));
+        offset += sizeof(authAttributes);
 
         // C4 - PW1 Status bytes
-        buffer[offset++] = (byte) 0xC4;
+        buffer[offset++] = (uint8_t) 0xC4;
         buffer[offset++] = 0x07;
         buffer[offset++] = pw1_status;
         buffer[offset++] = PW1_MAX_LENGTH;
         buffer[offset++] = RC_MAX_LENGTH;
         buffer[offset++] = PW3_MAX_LENGTH;
-        buffer[offset++] = pw1.getTriesRemaining();
-        buffer[offset++] = rc.getTriesRemaining();
-        buffer[offset++] = pw3.getTriesRemaining();
+        buffer[offset++] = pw1.remaining;
+        buffer[offset++] = rc.remaining;
+        buffer[offset++] = pw3.remaining;
 
         // C5 - Fingerprints sign, dec and auth keys
-        buffer[offset++] = (byte) 0xC5;
-        buffer[offset++] = (short) 60;
-        offset = sig_key.getFingerprint(buffer, offset);
-        offset = dec_key.getFingerprint(buffer, offset);
-        offset = auth_key.getFingerprint(buffer, offset);
+        buffer[offset++] = (uint8_t) 0xC5;
+        buffer[offset++] = (uint16_t) 60;   // * Doesn't really make sense to cast to 16-bit
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, sigFP, FP_SIZE);
+        offset += FP_SIZE;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, decFP, FP_SIZE);
+        offset += FP_SIZE;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, authFP, FP_SIZE);
+        offset += FP_SIZE;
 
         // C6 - Fingerprints CA 1, 2 and 3
-        buffer[offset++] = (byte) 0xC6;
-        buffer[offset++] = (short) 60;
-        offset = Util.arrayCopyNonAtomic(ca1_fp, _0, buffer, offset,
-                FP_LENGTH);
-        offset = Util.arrayCopyNonAtomic(ca2_fp, _0, buffer, offset,
-                FP_LENGTH);
-        offset = Util.arrayCopyNonAtomic(ca3_fp, _0, buffer, offset,
-                FP_LENGTH);
+        buffer[offset++] = (uint8_t) 0xC6;
+        buffer[offset++] = (uint16_t) 60;   // * Again, 16-bit casting to an 8-bit variable...
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, ca1_fp, FP_LENGTH);
+        offset += FP_LENGTH;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, ca2_fp, FP_LENGTH);
+        offset += FP_LENGTH;
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, ca3_fp, FP_LENGTH);
+        offset += FP_LENGTH;
 
         // CD - Generation times of public key pair
-        buffer[offset++] = (byte) 0xCD;
-        buffer[offset++] = (short) 12;
-        offset = sig_key.getTime(buffer, offset);
-        offset = dec_key.getTime(buffer, offset);
-        offset = auth_key.getTime(buffer, offset);
+        buffer[offset++] = (uint8_t) 0xCD;
+        buffer[offset++] = (uint16_t) 12;   // * Hope this is the last time of this casting
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, sigTime, sizeof(sigTime));
+        offset += sizeof(sigTime);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, decTime, sizeof(decTime));
+        offset += sizeof(decTime);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, authTime, sizeof(authTime));
+        offset += sizeof(authTime);
 
         // Set length of combined discretionary data objects
-        buffer[ddoLengthOffset] = (byte) (offset - ddoLengthOffset - 1);
-        return offset;
+        buffer[ddoLengthOffset] = (uint8_t) (offset - ddoLengthOffset - 1);
+
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 7A - Security support template
-    case (short) 0x007A:
+    case (uint16_t) 0x007A:
 
         // 93 - Digital signature counter
-        buffer[offset++] = (byte) 0x93;
+        buffer[offset++] = (uint8_t) 0x93;
         buffer[offset++] = 0x03;
-        offset = Util.arrayCopyNonAtomic(ds_counter, _0, buffer, offset,
-                (short) 3);
+        bufOffset = buffer + offset;
+        memcpy(bufOffset, ds_counter, sizeof(ds_counter));
+        offset += sizeof(ds_counter);
 
-        return offset;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 7F21 - Cardholder Certificate
-    case (short) 0x7F21:
-
+    case (uint16_t) 0x7F21:
         if (cert_length > 0) {
-            offset = Util.arrayCopyNonAtomic(cert, _0, buffer, offset,
-                    cert_length);
+            bufOffset = buffer + offset;
+            memcpy(bufOffset, cert, sizeof(cert));
+            offset += sizeof(cert);
         }
 
-        return offset;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // C4 - PW Status Bytes
-    case (short) 0x00C4:
+    case (uint16_t) 0x00C4:
         buffer[offset++] = pw1_status;
         buffer[offset++] = PW1_MAX_LENGTH;
         buffer[offset++] = RC_MAX_LENGTH;
         buffer[offset++] = PW3_MAX_LENGTH;
-        buffer[offset++] = pw1.getTriesRemaining();
-        buffer[offset++] = rc.getTriesRemaining();
-        buffer[offset++] = pw3.getTriesRemaining();
+        buffer[offset++] = pw1.remaining;
+        buffer[offset++] = rc.remaining;
+        buffer[offset++] = pw3.remaining;
 
-        return offset;
+        (*ret) = offset;
+        return SW_NO_ERROR;
+
     // 0101 - Private Use DO 1
-    case (short) 0x0101:
-        return Util.arrayCopyNonAtomic(private_use_do_1, _0, buffer, _0, private_use_do_1_length);
+    case (uint16_t) 0x0101:
+        memcpy(buffer, private_use_do_1, private_use_do_1_length);
+        offset += private_use_do_1_length;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 0102 - Private Use DO 2
-    case (short) 0x0102:
-        return Util.arrayCopyNonAtomic(private_use_do_2, _0, buffer, _0, private_use_do_2_length);
+    case (uint16_t) 0x0102:
+        memcpy(buffer, private_use_do_2, private_use_do_2_length);
+        offset += private_use_do_2_length;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 0103 - Private Use DO 3
-    case (short) 0x0103:
+    case (uint16_t) 0x0103:
         // For private use DO 3, PW1 must be verified with mode 82 to read
-        if (!(pw1.isValidated() && pw1_modes[PW1_MODE_NO82]))
-            ISOException.throwIt(SW_SECURITY_STATUS_NOT_SATISFIED);
-    return Util.arrayCopyNonAtomic(private_use_do_3, _0, buffer, _0, private_use_do_3_length);
+        if (!((pw3.validated != 1) && pw1_modes[PW1_MODE_NO82])) {
+            return SW_SECURITY_STATUS_NOT_SATISFIED;
+        }
+        memcpy(buffer, private_use_do_3, private_use_do_3_length);
+        offset += private_use_do_3_length;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     // 0104 - Private Use DO 4
-    case (short) 0x0104:
+    case (uint16_t) 0x0104:
         // For private use DO 4, PW3 must be verified to read
-        if (!pw3.isValidated())
-            ISOException.throwIt(SW_SECURITY_STATUS_NOT_SATISFIED);
-    return Util.arrayCopyNonAtomic(private_use_do_4, _0, buffer, _0, private_use_do_4_length);
-
+        if (pw3.validated != 1) {
+            return SW_SECURITY_STATUS_NOT_SATISFIED;
+        }
+        memcpy(buffer, private_use_do_4, private_use_do_4_length);
+        offset += private_use_do_4_length;
+        (*ret) = offset;
+        return SW_NO_ERROR;
 
     default:
-        ISOException.throwIt(SW_RECORD_NOT_FOUND);
+        return SW_RECORD_NOT_FOUND;
     }
-    
-    return offset;
+
+    (*ret) = offset;
+    return SW_NO_ERROR;
 }
-*/
+
+/**
+ * Send next block of data in buffer. Used for sending data in <buffer>
+ * 
+ * @param apdu
+ * @param status Status to send
+ */
+uint16_t sendNext(apdu_t apdu, uint16_t status, outData* output) {
+    uint8_t* bufOffset;
+
+    // Determine maximum size of the messages
+    uint16_t max_length;
+    max_length = RESPONSE_MAX_LENGTH;
+    
+    if (max_length > out_left) {
+        max_length = out_left;
+    }
+
+    bufOffset = buffer + out_sent;
+    memcpy(output->data, bufOffset, max_length);
+
+    uint16_t statusNew = status;
+    if (out_left > max_length) {
+        output->length = max_length;
+        
+        // Compute byte left and sent
+        out_left -= max_length;
+        out_sent += max_length;
+        
+        // Determine new status word
+        if (out_left > max_length) {
+            statusNew = (uint16_t) (SW_BYTES_REMAINING_00 | max_length);
+        } else {
+            statusNew = (uint16_t) (SW_BYTES_REMAINING_00 | out_left);
+        }
+    } else {
+        output->length = out_left;
+
+        // Reset buffer
+        out_sent = 0;
+        out_left = 0;
+    }
+
+    output->data[max_length] = (uint8_t) (statusNew >> 8);
+    output->data[max_length+1] = (uint8_t) (statusNew & 0xFF);
+    output->length += 2;
+    return statusNew;
+}
+
+/**
+ * Send len bytes from buffer. If len is greater than RESPONSE_MAX_LENGTH,
+ * remaining data can be retrieved using GET RESPONSE.
+ * 
+ * @param apdu
+ * @param len
+ *            The byte length of the data to send
+ */
+void sendBuffer(apdu_t apdu, uint16_t len, outData* output) {
+    out_sent = 0;
+    out_left = len;
+    sendNext(apdu, SW_NO_ERROR, output);
+}
 
 uint8_t initialize() {
     static const char* TAG = "initialize";
@@ -1068,34 +1262,60 @@ uint8_t initialize() {
     pw3_length = (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0]);
 
     mbedtls_rsa_init(&sigKey, MBEDTLS_RSA_PKCS_V15, 0);
-    mbedtls_rsa_init(&decKey, MBEDTLS_RSA_PKCS_V15, 0);
-    mbedtls_rsa_init(&authKey, MBEDTLS_RSA_PKCS_V15, 0);
     isSigEmpty = 1;
-    isDecEmpty = 1;
-    isAuthEmpty = 1;
+    sigAttributes[1] = (uint8_t) (KEY_SIZE >> 8);
+    sigAttributes[2] = (uint8_t) (KEY_SIZE & 0x00FF);
+    sigAttributes[3] = (uint8_t) (EXPONENT_SIZE >> 8);
+    sigAttributes[4] = (uint8_t) (EXPONENT_SIZE & 0x00FF);
+    bzero(sigFP, sizeof(sigFP));
 
+    mbedtls_rsa_init(&decKey, MBEDTLS_RSA_PKCS_V15, 0);
+    isDecEmpty = 1;
+    decAttributes[1] = (uint8_t) (KEY_SIZE >> 8);
+    decAttributes[2] = (uint8_t) (KEY_SIZE & 0x00FF);
+    decAttributes[3] = (uint8_t) (EXPONENT_SIZE >> 8);
+    decAttributes[4] = (uint8_t) (EXPONENT_SIZE & 0x00FF);
+    bzero(decFP, sizeof(decFP));
+
+    mbedtls_rsa_init(&authKey, MBEDTLS_RSA_PKCS_V15, 0);
+    isAuthEmpty = 1;
+    authAttributes[1] = (uint8_t) (KEY_SIZE >> 8);
+    authAttributes[2] = (uint8_t) (KEY_SIZE & 0x00FF);
+    authAttributes[3] = (uint8_t) (EXPONENT_SIZE >> 8);
+    authAttributes[4] = (uint8_t) (EXPONENT_SIZE & 0x00FF);
+    bzero(authFP, sizeof(authFP));
+
+    bzero(loginData, sizeof(loginData));
     loginData_length = 0;
+    bzero(url, sizeof(loginData));
     url_length = 0;
+    bzero(name, sizeof(loginData));
     name_length = 0;
+    bzero(lang, sizeof(lang));
     lang_length = 0;
     bzero(cert, sizeof(cert));
     cert_length = 0;
     sex = 0x39;
 
+    bzero(private_use_do_1, sizeof(private_use_do_1));
     private_use_do_1_length = 0;
+    bzero(private_use_do_2, sizeof(private_use_do_2));
     private_use_do_2_length = 0;
+    bzero(private_use_do_3, sizeof(private_use_do_3));
     private_use_do_3_length = 0;
+    bzero(private_use_do_4, sizeof(private_use_do_4));
     private_use_do_4_length = 0;
 
     return 0;
 }
 
 // NOT OK
-void process(apdu_t apdu) {
+void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
     uint16_t status = 0x9000;           // No error
+    uint16_t len = 0;
     uint8_t ret;
-    apdu.Le = 0;
+    //apdu.Le = 0;
 
     if (apdu.INS == 0xA4) {
             // Reset PW1 modes
@@ -1154,7 +1374,7 @@ void process(apdu_t apdu) {
         case (uint8_t) 0x2A:
             // COMPUTE DIGITAL SIGNATURE
             if (apdu.P1P2 == (uint16_t) 0x9E9A) {
-                status = computeDigitalSignature(&apdu.Le);
+                status = computeDigitalSignature(&len);
             }
             // DECIPHER
             else if (apdu.P1P2 == (uint16_t) 0x8086) {
@@ -1168,10 +1388,8 @@ void process(apdu_t apdu) {
 
         // INTERNAL AUTHENTICATE
         case (uint8_t) 0x88:
-            /*
-            le = internalAuthenticate(apdu);
+            status = internalAuthenticate(&len);
             break;
-            */
 
         // GENERATE ASYMMETRIC KEY PAIR
         case (uint8_t) 0x47:
@@ -1182,16 +1400,12 @@ void process(apdu_t apdu) {
 
         // GET CHALLENGE
         case (uint8_t) 0x84:
-            /*
-            le = getChallenge(apdu, lc);
-            */
+            status = getChallenge(apdu.Lc, &len);
             break;
 
         // GET DATA
         case (uint8_t) 0xCA:
-            /*
-            le = getData(p1p2);
-            */
+            status = getData(apdu.P1P2, &len);
             break;
 
         // PUT DATA
@@ -1267,9 +1481,9 @@ exit:
     } else {
         // GET RESPONSE
         if (apdu.INS == (uint8_t) 0xC0) {
-            //sendNext(apdu);
+            //sendNext(apdu, SW_NO_ERROR, &output);
         } else {
-            //sendBuffer(apdu, le);
+            sendBuffer(apdu, len, output);  // TODO: Check return value
         }
     }
 }

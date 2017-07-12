@@ -25,7 +25,7 @@
 #include "netlist.h"
 #include "libAPDU.h"
 
-//#define PRINTAPDU     // If defined, APDU info is printed
+#define PRINTAPDU     // If defined, APDU info is printed
 
 // FreeRTOS event group to signal when we are connected & ready to make a request
 static EventGroupHandle_t wifi_event_group;
@@ -105,7 +105,8 @@ static void taskConnect(void *pvParameters) {
 
     STATUS stat;
     int sockfd, r;
-    apdu_t newAPDU;
+    apdu_t comAPDU;
+    outData output;
     char recvBuf[1024];
     unsigned char input[16];
     struct sockaddr_in serv_addr;
@@ -148,26 +149,45 @@ static void taskConnect(void *pvParameters) {
             ESP_LOGE(TAG, "... socket connect failed errno=%d", errno);
             close(sockfd);
             vTaskDelay(4000 / portTICK_PERIOD_MS);
-            continue;
+            goto exit;
         }
         ESP_LOGI(TAG, "... connected");
 
-        bzero(recvBuf, sizeof(recvBuf));
-        r = read(sockfd, recvBuf, sizeof(recvBuf)-1);
-        close(sockfd);
-
-        newAPDU = parseAPDU(recvBuf, r);
-        process(newAPDU);
+        while(1) {
+            bzero(recvBuf, sizeof(recvBuf));
+            r = read(sockfd, recvBuf, sizeof(recvBuf)-1);
+            comAPDU = parseAPDU(recvBuf, r);
 
 #ifdef PRINTAPDU
-        printf("CLA: %02X\tINS: %02X\tP1: %02X\t", newAPDU.CLA, newAPDU.INS, newAPDU.P1);
-        printf("P2: %02X\tP1P2: %02X\tLc: %02X\tData: ", newAPDU.P2, newAPDU.P1P2, newAPDU.Lc);
-        const char* tmp = newAPDU.data;
-        while(*tmp)
-            printf("%02X ", (unsigned int) *tmp++);
-        printf("\nLe: %02X\tTotal: %d\n", newAPDU.Le, r);
-        fflush(stdout);
+            printf("CLA: %02X\tINS: %02X\tP1: %02X\t", comAPDU.CLA, comAPDU.INS, comAPDU.P1);
+            printf("P2: %02X\tP1P2: %02X\tLc: %02X\tData: ", comAPDU.P2, comAPDU.P1P2, comAPDU.Lc);
+            const uint8_t* tmp = comAPDU.data;
+            while(*tmp)
+                printf("%02X ", (unsigned int) *tmp++);
+            printf("\nLe: %02X\tTotal: %d\n", comAPDU.Le, r);
+            fflush(stdout);
 #endif
+
+            process(comAPDU, &output);
+
+#ifdef PRINTAPDU
+            printf("Output Data: ");
+            const uint8_t* tmp2 = output.data;
+            while(*tmp2)
+                printf("%02X ", (unsigned int) *tmp2++);
+            printf("\nLength: %d\n", output.length);
+            fflush(stdout);
+#endif
+
+            if (write(sockfd, output.data, output.length) < 0) {
+                ESP_LOGE(TAG, "... socket send failed");
+                close(sockfd);
+                vTaskDelay(4000 / portTICK_PERIOD_MS);
+                goto exit;
+            }
+            //close(sockfd);
+            ESP_LOGI(TAG, "... socket send success");
+        }
 
         ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         for (int countdown = 3; countdown > 0; countdown--) {
