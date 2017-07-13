@@ -135,7 +135,7 @@ typedef struct apdu_t {
     uint16_t P1P2;
     uint16_t Le;        // Check for correct parsing
     uint16_t Lc;        // Check for correct parsing
-    uint8_t data[256];     // maybe 128 is enough
+    uint8_t data[256];
 } apdu_t;
 
 typedef struct outData {
@@ -235,16 +235,16 @@ apdu_t parseAPDU(char* recvBuf, int n){
  *            Type of key to be returned
  * @return Key of requested type
  */
-mbedtls_rsa_context getKey(uint8_t type) {
+mbedtls_rsa_context* getKey(uint8_t type) {
     static const char *TAG = "getKey";
-    mbedtls_rsa_context key = sigKey;
+    mbedtls_rsa_context* key = &sigKey;
 
     if (type == (uint8_t) 0xB6) {
-        key = sigKey;
+        key = &sigKey;
     } else if (type == (uint8_t) 0xB8) {
-        key = decKey;
+        key = &decKey;
     } else if (type == (uint8_t) 0xA4) {
-        key = authKey;
+        key = &authKey;
     } else {
         ESP_LOGE(TAG, "SW_UNKNOWN");
     }
@@ -363,6 +363,7 @@ uint8_t readKeys(uint8_t type) {
         goto exitRK;
     }
 
+    //ret = mbedtls_mpi_size(&key->N);
     ret = (mbedtls_mpi_bitlen(&key->N) + 7) >> 3;
     key->len = ret;
 
@@ -442,7 +443,6 @@ void resetChaining() {
  * @param apdu
  */
 uint16_t commandChaining(apdu_t apdu){
-    static const char* TAG = "commandChaining";
     uint16_t len = apdu.Lc;
 
     if (chain != 0) {
@@ -453,14 +453,12 @@ uint16_t commandChaining(apdu_t apdu){
         // If chaining was already initiated, INS and P1P2 should match
         if ((chain == 1) && (apdu.INS != chain_ins && apdu.P1P2 != chain_p1p2)) {
             resetChaining();
-            ESP_LOGE(TAG, "SW_CONDITIONS_NOT_SATISFIED");
             return SW_CONDITIONS_NOT_SATISFIED;
         }
 
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
             resetChaining();
-            ESP_LOGE(TAG, "SW_WRONG_DATA");
             return SW_WRONG_DATA;
         }
 
@@ -472,7 +470,6 @@ uint16_t commandChaining(apdu_t apdu){
         chain = 1;
         chain_ins = apdu.INS;
         chain_p1p2 = apdu.P1P2;
-        ESP_LOGE(TAG, "SW_NO_ERROR");
         return SW_NO_ERROR;
     }
 
@@ -482,7 +479,6 @@ uint16_t commandChaining(apdu_t apdu){
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
             resetChaining();
-            ESP_LOGE(TAG, "SW_WRONG_DATA");
             return SW_WRONG_DATA;
         }
 
@@ -494,7 +490,6 @@ uint16_t commandChaining(apdu_t apdu){
     } else if (chain == 1) {
         // Chained command expected
         resetChaining();
-        ESP_LOGE(TAG, "SW_UNKNOWN");
         return SW_UNKNOWN;
     } else {
         // No chaining was used, so copy data to buffer
@@ -820,7 +815,7 @@ uint16_t internalAuthenticate(uint16_t* length) {
  * @param key
  *            Key pair containing public key to be output
  */
-uint16_t sendPublicKey(mbedtls_rsa_context key) {
+uint16_t sendPublicKey(mbedtls_rsa_context* key) {
     // Build message in buffer
     short int offset = 0;
 
@@ -844,14 +839,14 @@ uint16_t sendPublicKey(mbedtls_rsa_context key) {
     }
 
     uint8_t* bufOffset = buffer + offset;
-    mbedtls_mpi_write_binary(&key.N, bufOffset, KEY_SIZE_BYTES);
+    mbedtls_mpi_write_binary(&key->N, bufOffset, KEY_SIZE_BYTES);
     offset += KEY_SIZE_BYTES;
 
     // 82 - Exponent
     buffer[offset++] = (uint8_t) 0x82;
     buffer[offset++] = (uint8_t) EXPONENT_SIZE_BYTES;
     bufOffset = buffer + offset;
-    mbedtls_mpi_write_binary(&key.E, bufOffset, EXPONENT_SIZE_BYTES);
+    mbedtls_mpi_write_binary(&key->E, bufOffset, EXPONENT_SIZE_BYTES);
     offset += EXPONENT_SIZE_BYTES;
 
     buffer[offsetForLength] = (uint8_t) ((offset - offsetForLength - 2) >> 8);
@@ -1414,10 +1409,272 @@ uint16_t putData(uint16_t tag) {
 }
 
 /**
+ * Get number of bytes needed to represent length for TLV element.
+ * 
+ * @param length
+ *            Length of value
+ * @return Number of bytes needed to represent length
+ */
+uint16_t getLengthBytes(uint16_t length) {
+    if (length <= 127) {
+        return 1;
+    } else if (length <= 255) {
+        return 2;
+    } else {
+        return 3;
+    }
+}
+
+/**
+ * Get length of TLV element.
+ * 
+ * @param data
+ *            Byte array
+ * @param offset
+ *            Offset within byte array containing first byte
+ * @return Length of value
+ */
+uint16_t getLength(uint8_t* data, uint16_t offset, uint16_t* status) {
+    uint16_t len = 0;
+
+    if ((data[offset] & (uint8_t) 0x80) == (uint8_t) 0x00) {
+        len = data[offset];
+        (*status) = SW_NO_ERROR;
+    } else if ((data[offset] & (uint8_t) 0x7F) == (uint8_t) 0x01) {
+        len = data[(uint16_t) (offset + 1)];
+        len &= 0x00FF;
+        (*status) = SW_NO_ERROR;
+    } else if ((data[offset] & (uint8_t) 0x7F) == (uint8_t) 0x02) {
+        len = (uint16_t) (data[(uint16_t) (offset + 1)] << 8) | data[(uint16_t) (offset + 2)];
+        (*status) = SW_NO_ERROR;
+    } else {
+        (*status) = SW_UNKNOWN;
+    }
+
+    return len;
+}
+
+/**
+ * Provide functionality for importing keys.
+ * 
+ * @param apdu
+ */
+uint16_t importKey() {
+    uint16_t status;
+    uint8_t* bufOffset;
+    uint16_t offset = 0;
+
+    if (pw3.validated == 0) {
+        return SW_SECURITY_STATUS_NOT_SATISFIED;
+    }
+
+    // Check for tag 4D
+    if (buffer[offset++] != 0x4D) {
+        return SW_DATA_INVALID;
+    }
+
+    // Length of 4D
+    uint16_t len = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len);
+    } else {
+        return status;
+    }
+
+    // Get key for Control Reference Template
+    mbedtls_rsa_context* key = getKey(buffer[offset++]);
+
+    // Skip empty length of CRT
+    offset++;
+
+    // Check for tag 7F48
+    if (buffer[offset++] != 0x7F || buffer[offset++] != 0x48) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_template = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_template);
+    } else {
+        return status;
+    }
+
+    uint16_t offset_data = (uint16_t) (offset + len_template);
+
+    if (buffer[offset++] != (uint8_t) 0x91) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_e = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_e);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x92) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_p = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_p);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x93) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_q = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_q);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x94) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_pq = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_pq);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x95) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_dp1 = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_dp1);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x96) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_dq1 = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_dq1);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset++] != (uint8_t) 0x97) {
+        return SW_DATA_INVALID;
+    }
+    uint16_t len_modulus = getLength(buffer, offset, &status);
+    if (status == SW_NO_ERROR) {
+        offset += getLengthBytes(len_modulus);
+    } else {
+        return status;
+    }
+
+    if (buffer[offset_data++] != 0x5F || buffer[offset_data++] != 0x48) {
+        return SW_DATA_INVALID;
+    }
+    len = getLength(buffer, offset_data, &status);
+
+    mbedtls_mpi P1, Q1, H;
+    mbedtls_mpi_init(&P1);
+    mbedtls_mpi_init(&Q1);
+    mbedtls_mpi_init(&H);
+
+    offset_data += getLengthBytes(len);
+    bufOffset = buffer + offset_data;
+    if((mbedtls_mpi_read_binary(&key->E, bufOffset, len_e) != 0)) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+
+    offset_data += len_e;
+    bufOffset = buffer + offset_data;
+    if((mbedtls_mpi_read_binary(&key->P, bufOffset, len_p) != 0)) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+
+    offset_data += len_p;
+    bufOffset = buffer + offset_data;
+    if((mbedtls_mpi_read_binary(&key->Q, bufOffset, len_q) != 0)) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+
+    if (mbedtls_mpi_mul_mpi(&key->N, &key->P, &key->Q) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_sub_int(&P1, &key->P, 1) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_sub_int(&Q1, &key->Q, 1) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_mul_mpi(&H, &P1, &Q1) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_inv_mod(&key->D , &key->E, &H) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_mod_mpi(&key->DP, &key->D, &P1) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_mod_mpi(&key->DQ, &key->D, &Q1) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    if (mbedtls_mpi_inv_mod(&key->QP, &key->Q, &key->P) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    status = SW_NO_ERROR;
+
+cleanup:
+    mbedtls_mpi_free(&P1);
+    mbedtls_mpi_free(&Q1);
+    mbedtls_mpi_free(&H);
+    return status;
+}
+
+uint16_t setPinRetries(uint8_t pin_retries, uint8_t reset_retries, uint8_t admin_retries) {
+    if (pw3.validated == 0) {
+        return SW_CONDITIONS_NOT_SATISFIED;
+    }
+    if (pin_retries != 0) {
+        pw1.limit = pin_retries;
+        if (updatePIN(&pw1, PW1_DEFAULT, 0, (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0])) != 0) {
+            return SW_UNKNOWN;
+        }
+        pw1_length = (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0]);
+        pw1_status = 0x00;
+    }
+    if (reset_retries != 0) {
+        rc.limit = reset_retries;
+        rc_length = 0;
+    }
+    if (admin_retries != 0) {
+        pw3.limit = admin_retries;
+        if (updatePIN(&pw3, PW3_DEFAULT, 0, (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0])) != 0) {
+            return SW_UNKNOWN;
+        }
+        pw3_length = (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0]);
+    }
+    //JCSystem.requestObjectDeletion(); // Find out what this exactly does
+    return SW_NO_ERROR;
+}
+
+/**
  * Send next block of data in buffer. Used for sending data in <buffer>
  * 
  * @param apdu
  * @param status Status to send
+ * @param output The struct that will hold the output
  */
 uint16_t sendNext(apdu_t apdu, uint16_t status, outData* output) {
     uint8_t* bufOffset;
@@ -1466,13 +1723,26 @@ uint16_t sendNext(apdu_t apdu, uint16_t status, outData* output) {
  * remaining data can be retrieved using GET RESPONSE.
  * 
  * @param apdu
- * @param len
- *            The byte length of the data to send
+ * @param len The byte length of the data to send
+ * @param output The struct that will hold the output
  */
 void sendBuffer(apdu_t apdu, uint16_t len, outData* output) {
     out_sent = 0;
     out_left = len;
     sendNext(apdu, SW_NO_ERROR, output);
+}
+
+/**
+ * Send provided status
+ * 
+ * @param apdu
+ * @param status Status to send
+ * @param output The struct that will hold the output 
+ */
+void sendError(apdu_t apdu, uint16_t status, outData* output) {
+    out_sent = 0;
+    out_left = 0;
+    sendNext(apdu, status, output);
 }
 
 uint8_t initialize() {
@@ -1552,7 +1822,6 @@ uint8_t initialize() {
     return 0;
 }
 
-// NOT OK
 void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
     uint16_t status = SW_NO_ERROR;
@@ -1560,11 +1829,11 @@ void process(apdu_t apdu, outData* output) {
     uint8_t ret;
 
     if (apdu.INS == 0xA4) {
-            // Reset PW1 modes
-            pw1_modes[PW1_MODE_NO81] = 0;
-            pw1_modes[PW1_MODE_NO82] = 0;
+        // Reset PW1 modes
+        pw1_modes[PW1_MODE_NO81] = 0;
+        pw1_modes[PW1_MODE_NO82] = 0;
 
-            return;
+        return;
     }
 
     // Support for command chaining
@@ -1579,7 +1848,6 @@ void process(apdu_t apdu, outData* output) {
     }
 
     if (terminated == 1 && apdu.INS != 0x44) {
-        ESP_LOGE(TAG, "SW_CONDITIONS_NOT_SATISFIED, terminated == 1");
         status = SW_CONDITIONS_NOT_SATISFIED;
         goto exit;
     }
@@ -1652,64 +1920,54 @@ void process(apdu_t apdu, outData* output) {
 
         // PUT DATA
         case (uint8_t) 0xDA:
-            /*
-            putData(p1p2);
-            */
+            status = putData(apdu.P1P2);
             break;
 
         // DB - PUT DATA (Odd)
         case (uint8_t) 0xDB:
             // Odd PUT DATA only supported for importing keys
             // 4D - Extended Header list
-            /*
-            if (p1p2 == (short) 0x3FFF) {
-                importKey(apdu);
+            if (apdu.P1P2 == (uint16_t) 0x3FFF) {
+                status = importKey();
             } else {
-                ESP_LOGE(TAG, "SW_RECORD_NOT_FOUND");
+                status = SW_RECORD_NOT_FOUND;
             }
             break;
-            */
 
         // E6 - TERMINATE DF
         case (uint8_t) 0xE6:
-            /*
-            if (pw1.getTriesRemaining() == 0 && pw3.getTriesRemaining() == 0) {
-                terminated = true;
+            if ((pw1.remaining == 0) && (pw3.remaining == 0)) {
+                terminated = 1;
             } else {
-                ESP_LOGE(TAG, "SW_CONDITIONS_NOT_SATISFIED");
+                status = SW_CONDITIONS_NOT_SATISFIED;
             }
-            */
             break;
 
         // 44 - ACTIVATE FILE
         case (uint8_t) 0x44:
-            /*
-            if (terminated == true) {
+            if (terminated == 1) {
                 initialize();
-                terminated = false;
-                JCSystem.requestObjectDeletion();
+                terminated = 0;
+                //JCSystem.requestObjectDeletion(); // Find out what this exactly does
             } else {
-                ESP_LOGE(TAG, "SW_CONDITIONS_NOT_SATISFIED");
+                status = SW_CONDITIONS_NOT_SATISFIED;
             }
-            */
             break;
 
         // GET VERSION (vendor specific)
         case (uint8_t) 0xF1:
-            /*
-            le = Util.arrayCopy(VERSION, _0, buffer, _0, (short) VERSION.length);
-            */
+            memcpy(buffer, VERSION, sizeof(VERSION));
+            len = sizeof(VERSION);
+            status = SW_NO_ERROR;
             break;
 
         // SET RETRIES (vendor specific)
         case (uint8_t) 0xF2:
-            /*
-            if (lc != 3) {
-                ESP_LOGE(TAG, "SW_WRONG_DATA");
+            if (apdu.Lc != 3) {
+                status = SW_WRONG_DATA;
+            } else {
+                status = setPinRetries(apdu.data[0], apdu.data[1], apdu.data[2]);
             }
-            short offs = ISO7816.OFFSET_CDATA;
-            setPinRetries(buf[offs++], buf[offs++], buf[offs++]);
-            */
             break;
 
         default :
@@ -1718,14 +1976,13 @@ void process(apdu_t apdu, outData* output) {
 exit:
     if (status != (uint16_t) 0x9000) {
         // Send the exception that was thrown 
-        //sendError(apdu, ret);
-        //sendException(apdu, status);
+        sendError(apdu, status, output);
     } else {
         // GET RESPONSE
         if (apdu.INS == (uint8_t) 0xC0) {
-            //sendNext(apdu, SW_NO_ERROR, &output);
+            sendNext(apdu, SW_NO_ERROR, output);
         } else {
-            sendBuffer(apdu, len, output);  // TODO: Check return value
+            sendBuffer(apdu, len, output);
         }
     }
 }
