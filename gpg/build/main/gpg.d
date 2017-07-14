@@ -108,7 +108,10 @@ gpg.o: /Users/CMelas/esp/cxm661/gpg/main/./gpg.c \
  /Users/CMelas/esp/esp-idf/components/lwip/include/lwip/apps/dhcpserver.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_event_loop.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
+ /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h \
+ /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs_flash.h \
+ /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/uart.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/uart_reg.h \
@@ -128,8 +131,6 @@ gpg.o: /Users/CMelas/esp/cxm661/gpg/main/./gpg.c \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/integer.h \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h \
  /Users/CMelas/esp/esp-idf/components/wear_levelling/include/wear_levelling.h \
- /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h \
- /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
  /Users/CMelas/esp/cxm661/gpg/main/./netlist.h \
  /Users/CMelas/esp/cxm661/gpg/main/./libAPDU.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/ctr_drbg.h \
@@ -366,7 +367,13 @@ gpg.o: /Users/CMelas/esp/cxm661/gpg/main/./gpg.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
+/Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h:
+
+/Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
+
 /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs_flash.h:
+
+/Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/uart.h:
 
@@ -405,10 +412,6 @@ gpg.o: /Users/CMelas/esp/cxm661/gpg/main/./gpg.c \
 /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h:
 
 /Users/CMelas/esp/esp-idf/components/wear_levelling/include/wear_levelling.h:
-
-/Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h:
-
-/Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
 
 /Users/CMelas/esp/cxm661/gpg/main/./netlist.h:
 

@@ -11,7 +11,9 @@
 #include "esp_wifi.h"
 #include "esp_event_loop.h"
 #include "esp_log.h"
+#include "esp_partition.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "rom/uart.h"
 
 #include "lwip/err.h"
@@ -24,6 +26,7 @@
 
 #include "netlist.h"
 #include "libAPDU.h"
+
 
 #define PRINTAPDU     // If defined, APDU info is printed
 
@@ -100,6 +103,20 @@ void unmountFS() {
     ESP_LOGI(TAG, "Done");
 }
 
+void initNVS() {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        // NVS partition was truncated and needs to be erased
+        const esp_partition_t* nvs_partition = esp_partition_find_first(
+                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+        assert(nvs_partition && "partition table must have an NVS partition");
+        ESP_ERROR_CHECK( esp_partition_erase_range(nvs_partition, 0, nvs_partition->size) );
+        // Retry nvs_flash_init
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+}
+
 static void taskConnect(void *pvParameters) {
     static const char *TAG = "taskConnect";
 
@@ -110,9 +127,27 @@ static void taskConnect(void *pvParameters) {
     char recvBuf[1024];
     unsigned char input[16];
     struct sockaddr_in serv_addr;
-    
-    if (initialize()){
+
+    nvs_handle nvsHandle;
+    esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvsHandle);
+    if (err != ESP_OK) {
         goto exit;
+    } else {
+        uint8_t initialized = 0;
+        err = nvs_get_u8(nvsHandle, "initialized", &initialized);
+        nvs_close(nvsHandle);
+        switch (err) {
+            case ESP_OK:
+                //restoreState();
+                break;
+            case ESP_ERR_NVS_NOT_FOUND:
+                if (initialize()){
+                    goto exit;
+                }
+                break;
+            default :
+                goto exit;
+        }
     }
 
     while(1) {
