@@ -364,19 +364,16 @@ int keyGen(uint8_t type) {
     if (type == (uint8_t) 0xB6) {
         key = &sigKey;
         if ((fpriv = fopen("/spiflash/sigKey.dat", "wb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open sigKey.txt for writing\n");
             goto exitKG;
         }
     } else if (type == (uint8_t) 0xB8) {
         key = &decKey;
         if ((fpriv = fopen("/spiflash/decKey.dat", "wb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open decKey.txt for writing\n");
             goto exitKG;
         }
     } else if (type == (uint8_t) 0xA4) {
         key = &authKey;
         if ((fpriv = fopen("/spiflash/authKey.dat", "wb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open authKey.txt for writing\n");
             goto exitKG;
         }
     } else {
@@ -403,7 +400,6 @@ int keyGen(uint8_t type) {
     }
     fclose(fpriv);
     ret = 0;
-    ESP_LOGI(TAG, "\nSuccess\n");
 
 exitKG:
     mbedtls_ctr_drbg_free(&ctr_drbg);
@@ -421,19 +417,16 @@ uint8_t readKeys(uint8_t type) {
     if (type == (uint8_t) 0xB6) {
         key = &sigKey;
         if ((f = fopen("/spiflash/sigKey.dat", "rb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open sigKey.txt for reading\n");
             goto exitRK;
         }
     } else if (type == (uint8_t) 0xB8) {
         key = &decKey;
         if ((f = fopen("/spiflash/decKey.dat", "rb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open decKey.txt for reading\n");
             goto exitRK;
         }
     } else if (type == (uint8_t) 0xA4) {
         key = &authKey;
         if ((f = fopen("/spiflash/authKey.dat", "rb")) == NULL) {
-            ESP_LOGE(TAG, "\nError:\tCould not open authKey.txt for reading\n");
             goto exitRK;
         }
     } else {
@@ -777,9 +770,7 @@ uint16_t increaseDSCounter() {
             break;
         }
     }
-    ERRORCHK(storeVar("ds_count0", ds_counter[0], 0, 8), return SW_UNKNOWN);
-    ERRORCHK(storeVar("ds_count1", ds_counter[1], 0, 8), return SW_UNKNOWN);
-    ERRORCHK(storeVar("ds_count2", ds_counter[2], 0, 8), return SW_UNKNOWN);
+    ERRORCHK(storeBuf("/spiflash/ds_count.dat", ds_counter, sizeof(ds_counter)), return 1);
 
     return SW_NO_ERROR;
 }
@@ -979,7 +970,6 @@ uint16_t sendPublicKey(mbedtls_rsa_context* key) {
     return offset;
 }
 
-
 /**
  * Provide the GENERATE ASYMMETRIC KEY PAIR command (INS 47)
  *
@@ -1008,6 +998,7 @@ uint16_t genAsymKey(uint8_t mode) {
 
         if (buffer[0] == (uint8_t) 0xB6) {
             bzero(ds_counter, sizeof(ds_counter));
+            ERRORCHK(storeBuf("/spiflash/ds_count.dat", ds_counter, sizeof(ds_counter)), return 1);
         }
     }
 
@@ -1590,6 +1581,7 @@ uint16_t importKey() {
     uint16_t status;
     uint8_t* bufOffset;
     uint16_t offset = 0;
+    FILE* fpriv = NULL;
 
     if (pw3.validated == 0) {
         return SW_SECURITY_STATUS_NOT_SATISFIED;
@@ -1609,7 +1601,8 @@ uint16_t importKey() {
     }
 
     // Get key for Control Reference Template
-    mbedtls_rsa_context* key = getKey(buffer[offset++]);
+    uint8_t type = buffer[offset++];
+    mbedtls_rsa_context* key = getKey(type);
 
     // Skip empty length of CRT
     offset++;
@@ -1760,10 +1753,51 @@ uint16_t importKey() {
         status = SW_UNKNOWN;
         goto cleanup;
     }
-    status = SW_NO_ERROR;
 
-    // CHECK KEY
-    // WRITE KEY
+    // Check the key
+    if (mbedtls_rsa_check_privkey(key) != 0) {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+
+    // Store the key to the flash memory
+    if (type == (uint8_t) 0xB6) {
+        if ((fpriv = fopen("/spiflash/sigKey.dat", "wb")) == NULL) {
+            status = SW_UNKNOWN;
+            goto cleanup;
+        }
+    } else if (type == (uint8_t) 0xB8) {
+        if ((fpriv = fopen("/spiflash/decKey.dat", "wb")) == NULL) {
+            status = SW_UNKNOWN;
+            goto cleanup;
+        }
+    } else if (type == (uint8_t) 0xA4) {
+        if ((fpriv = fopen("/spiflash/authKey.dat", "wb")) == NULL) {
+            status = SW_UNKNOWN;
+            goto cleanup;
+        }
+    } else {
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+
+    int ret;
+    if ((ret = mbedtls_mpi_write_file("N = " , &key->N , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("E = " , &key->E , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("D = " , &key->D , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("P = " , &key->P , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("Q = " , &key->Q , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("DP = ", &key->DP, 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("DQ = ", &key->DQ, 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("QP = ", &key->QP, 16, fpriv)) != 0) {
+        ESP_LOGE("importKey", "\nError:\tmbedtls_mpi_write_file returned %d\n\n", ret);
+        fclose(fpriv);
+        status = SW_UNKNOWN;
+        goto cleanup;
+    }
+    fclose(fpriv);
+
+    status = SW_NO_ERROR;
 
 cleanup:
     mbedtls_mpi_free(&P1);
@@ -1889,7 +1923,7 @@ void sendError(apdu_t apdu, uint16_t status, outData* output) {
 uint8_t initialize() {
     static const char* TAG = "initialize";
     bzero(buffer, sizeof(buffer));
-    bzero(pw1_modes, sizeof(pw1_modes));
+    pw1_modes[PW1_MODE_NO81] = 0;
     ERRORCHK(storeVar("PW1_MODE_NO81", pw1_modes[PW1_MODE_NO81], 0, 8), return 1);
     pw1_modes[PW1_MODE_NO82] = 0;
     ERRORCHK(storeVar("PW1_MODE_NO82", pw1_modes[PW1_MODE_NO82], 0, 8), return 1);
@@ -1933,6 +1967,8 @@ uint8_t initialize() {
     ERRORCHK(storeBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigFP)), return 1);
     bzero(sigFP, sizeof(sigFP));
     ERRORCHK(storeBuf("/spiflash/sigFP.dat", sigFP, sizeof(sigFP)), return 1);
+    bzero(sigTime, sizeof(sigTime));
+    ERRORCHK(storeBuf("/spiflash/sigTime.dat", sigTime, sizeof(sigTime)), return 1);
 
     mbedtls_rsa_init(&decKey, MBEDTLS_RSA_PKCS_V15, 0);
     isDecEmpty = 1;
@@ -1944,6 +1980,8 @@ uint8_t initialize() {
     ERRORCHK(storeBuf("/spiflash/decAttr.dat", decAttributes, sizeof(decAttributes)), return 1);
     bzero(decFP, sizeof(decFP));
     ERRORCHK(storeBuf("/spiflash/decFP.dat", decFP, sizeof(decFP)), return 1);
+    bzero(decTime, sizeof(decTime));
+    ERRORCHK(storeBuf("/spiflash/decTime.dat", decTime, sizeof(decTime)), return 1);
 
     mbedtls_rsa_init(&authKey, MBEDTLS_RSA_PKCS_V15, 0);
     isAuthEmpty = 1;
@@ -1955,6 +1993,8 @@ uint8_t initialize() {
     ERRORCHK(storeBuf("/spiflash/authAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
     bzero(authFP, sizeof(authFP));
     ERRORCHK(storeBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
+    bzero(authTime, sizeof(authTime));
+    ERRORCHK(storeBuf("/spiflash/authTime.dat", authTime, sizeof(authTime)), return 1);
 
     loginData_length = 0;
     ERRORCHK(storeVar("loginData_len", 0, loginData_length, 16), return 1);
