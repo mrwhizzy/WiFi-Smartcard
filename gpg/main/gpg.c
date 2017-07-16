@@ -138,7 +138,7 @@ static void taskConnect(void *pvParameters) {
         nvs_close(nvsHandle);
         switch (err) {
             case ESP_OK:
-                //restoreState();
+                restoreState();
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
                 if (initialize()){
@@ -220,10 +220,10 @@ static void taskConnect(void *pvParameters) {
                 vTaskDelay(4000 / portTICK_PERIOD_MS);
                 goto exit;
             }
-            //close(sockfd);
             ESP_LOGI(TAG, "... socket send success");
         }
 
+        close(sockfd);
         ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
         for (int countdown = 3; countdown > 0; countdown--) {
             ESP_LOGI(TAG, "%d... ", countdown);
@@ -242,5 +242,5 @@ void app_main() {
         exit(0);
     }
     initWiFi();
-    xTaskCreate(&taskConnect, "taskConnect", 8192, NULL, 5, NULL);
+    xTaskCreate(&taskConnect, "taskConnect", 16384, NULL, 5, NULL);
 }
