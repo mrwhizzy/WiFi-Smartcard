@@ -281,7 +281,7 @@ uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
 void restoreState() {
 
     // TODO restore everything
-    //restoreKeys
+    // restoreKeys
 }
 
 /**
@@ -2045,7 +2045,7 @@ uint8_t initialize() {
     ERRORCHK(storeBuf("/spiflash/privdo4.dat", private_use_do_4, private_use_do_4_length), return 1);
 
     ERRORCHK(storeVar("initialized", 1, 0, 8), return 1);
-    ESP_LOGE(TAG, "INITIALIZED");
+    ESP_LOGI(TAG, "SUCCESS");
 
     return 0;
 }
