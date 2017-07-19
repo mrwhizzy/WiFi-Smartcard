@@ -114,6 +114,8 @@ static uint8_t PW3_DEFAULT[8] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
 #define EXPONENT 65537
 #define FP_SIZE 20
 
+uint8_t zero = 0;
+
 uint8_t loginData[LOGINDATA_MAX_LENGTH];
 uint16_t loginData_length;
 
@@ -248,11 +250,19 @@ uint16_t storeBuf(char* key, uint8_t* ptr, uint16_t len) {
 
 uint8_t updatePINattr() {
     ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
-    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
-    ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw1_remaining", pw1.remaining, 0, 8), return 1);
+    ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
+
+    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
     ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
+    ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, rc_length+1), return 1);
+
+    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
+    ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw3_remaining", pw3.remaining, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
     return 0;
 }
 
@@ -336,9 +346,10 @@ apdu_t parseAPDU(char* recvBuf, int n){
  *            Type of key to be returned
  * @return Key of requested type
  */
-mbedtls_rsa_context* getKey(uint8_t type) {
+mbedtls_rsa_context* getKey(uint8_t type, uint8_t* err) {
     static const char *TAG = "getKey";
     mbedtls_rsa_context* key = &sigKey;
+    (*err) = 0;
 
     if (type == (uint8_t) 0xB6) {
         key = &sigKey;
@@ -348,6 +359,7 @@ mbedtls_rsa_context* getKey(uint8_t type) {
         key = &authKey;
     } else {
         ESP_LOGE(TAG, "SW_UNKNOWN");
+        (*err) = 1;
     }
 
     return key;
@@ -376,22 +388,25 @@ int keyGen(uint8_t type) {
         key = &sigKey;
         isEmpty = &isSigEmpty;
         if ((fpriv = fopen("/spiflash/sigKey.dat", "wb")) == NULL) {
+            ret = 1;
             goto exitKG;
         }
     } else if (type == (uint8_t) 0xB8) {
         key = &decKey;
         isEmpty = &isDecEmpty;
         if ((fpriv = fopen("/spiflash/decKey.dat", "wb")) == NULL) {
+            ret = 1;
             goto exitKG;
         }
     } else if (type == (uint8_t) 0xA4) {
         key = &authKey;
         isEmpty = &isAuthEmpty;
         if ((fpriv = fopen("/spiflash/authKey.dat", "wb")) == NULL) {
+            ret = 1;
             goto exitKG;
         }
     } else {
-        ESP_LOGE(TAG, "SW_UNKNOWN");
+        ret = 1;
         goto exitKG;
     }
 
@@ -421,7 +436,8 @@ int keyGen(uint8_t type) {
     }
     (*isEmpty) = 0;
     if (updateKeyStatus() != 0) {
-        return 1;
+        ret = 1;
+        goto exitKG;
     }
     ret = 0;
 
@@ -490,15 +506,13 @@ uint8_t readKey(uint8_t type) {
     }
     fclose(f);
     ESP_LOGI(TAG, "Read from key file:\n%s\n", line);
-    // testing purposes end here
+    // these purposes end here
 
 exitRK:
     return ret;
 }
 
 uint8_t restoreState() {
-    ESP_LOGE("BEFORE", "pw3.remaining: %d", pw3.remaining);
-    printf("Name: %s\n", name);
     fflush(stdout);
 
     bzero(buffer, sizeof(buffer));
@@ -507,7 +521,7 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("pw1_limit", &pw1.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_length", &pw1_length, 0, 8), return 1);
-    ERRORCHK(restoreBuf("/spiflash/pw1.dat", pw1.value, pw1_length), return 1);
+    ERRORCHK(restoreBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
     ERRORCHK(restoreVar("pw1_validated", &pw1.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_remaining", &pw1.remaining, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_status", &pw1_status, 0, 8), return 1);
@@ -519,30 +533,68 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("pw3_limit", &pw3.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_length", &pw3_length, 0, 8), return 1);
-    ERRORCHK(restoreBuf("/spiflash/pw3.dat", pw3.value, pw3_length), return 1);
+    ERRORCHK(restoreBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
     ERRORCHK(restoreVar("pw3_validated", &pw3.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_remaining", &pw3.remaining, 0, 8), return 1);
 
-
-    readKey(0xB6);
-    readKey(0xB8);
-    readKey(0xA4);
-
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
+    if (isSigEmpty == 0) {
+        ESP_LOGI("restore", "do I?");
+        readKey(0xB6);
+    }
+    ERRORCHK(restoreBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigAttributes)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/sigFP.dat", sigFP, sizeof(sigFP)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/sigTime.dat", sigTime, sizeof(sigTime)), return 1);
+
     ERRORCHK(restoreVar("isDecEmpty", &isDecEmpty, 0, 8), return 1);
+    if (isDecEmpty == 0) {
+        readKey(0xB8);
+    }
+    ERRORCHK(restoreBuf("/spiflash/decAttr.dat", decAttributes, sizeof(decAttributes)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/decFP.dat", decFP, sizeof(decFP)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/decTime.dat", decTime, sizeof(decTime)), return 1);
+
     ERRORCHK(restoreVar("isAuthEmpty", &isAuthEmpty, 0, 8), return 1);
+    if (isAuthEmpty == 0) {
+        readKey(0xA4);
+    }
+    ERRORCHK(storeBuf("/spiflash/authAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
+    ERRORCHK(storeBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
+    ERRORCHK(storeBuf("/spiflash/authTime.dat", authTime, sizeof(authTime)), return 1);
 
+    ERRORCHK(restoreVar("loginData_len", 0, &loginData_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/logData.dat", loginData, loginData_length), return 1);
 
+    ERRORCHK(restoreVar("url_length", 0, &url_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/url.dat", url, url_length), return 1);
 
     ERRORCHK(restoreVar("name_length", 0, &name_length, 16), return 1);
     ERRORCHK(restoreBuf("/spiflash/name.dat", name, name_length), return 1);
 
-    ESP_LOGE("AFTER", "pw3.remaining: %d", pw3.remaining);
-    printf("Name: %s\n", name);
-    fflush(stdout);
+    ERRORCHK(restoreVar("lang_length", 0, &lang_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/lang.dat", lang, lang_length), return 1);
+
+    ERRORCHK(restoreVar("cert_length", 0, &cert_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/cert.dat", cert, cert_length), return 1);
+
+    ERRORCHK(restoreVar("sex", &sex, 0, 8), return 1);
+
+    ERRORCHK(restoreVar("privdo1_len", 0, &private_use_do_1_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/privdo1.dat", private_use_do_1, private_use_do_1_length), return 1);
+
+    ERRORCHK(restoreVar("privdo2_len", 0, &private_use_do_2_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/privdo2.dat", private_use_do_2, private_use_do_2_length), return 1);
+
+    ERRORCHK(restoreVar("privdo3_len", 0, &private_use_do_3_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/privdo3.dat", private_use_do_3, private_use_do_3_length), return 1);
+
+    ERRORCHK(restoreVar("privdo4_len", 0, &private_use_do_4_length, 16), return 1);
+    ERRORCHK(restoreBuf("/spiflash/privdo4.dat", private_use_do_4, private_use_do_4_length), return 1);
+
+    ERRORCHK(restoreVar("terminated", &terminated, 0, 8), return 1);
+
+    ESP_LOGI("restoreState", "SUCCESS");
     return 0;
-    // TODO restore everything
-    // restoreKeys
 }
 
 /**
@@ -556,31 +608,22 @@ uint8_t checkPIN(ownerPIN* pw, uint8_t* pin, uint8_t length) {
     if (pw->remaining == 0) {
         return 1;
     }
-    ESP_LOGE("checkPIN1", "pw3.remaining: %d", pw3.remaining);
     pw->remaining = (uint8_t) (pw->remaining - 1);
     pw->validated = 0;
-    ESP_LOGE("checkPIN2", "pw3.remaining: %d", pw3.remaining);
     if (updatePINattr() != 0) {
         return 1;
     }
-    ESP_LOGE("checkPIN3", "pw3.remaining: %d", pw3.remaining);
 
     if (pw->value[0] != length) {   // * OOPS, timing attack vulnerability spotted! :D
         return 1;                   // At least you can infer the length of the PIN
     }
-    ESP_LOGE("checkPIN4", "pw3.remaining: %d", pw3.remaining);
 
     if (memcmp(pin, &pw->value[1], length) == 0) {
-        ESP_LOGE("checkPIN5", "pw3.remaining: %d", pw3.remaining);
         pw->validated = 1;
         pw->remaining = (uint8_t) (pw->remaining + 1); // Restore
-        ESP_LOGE("checkPIN6", "pw3.remaining: %d", pw3.remaining);
-
         if (updatePINattr() != 0) {
             return 1;
         }
-        ESP_LOGE("checkPIN7", "pw3.remaining: %d", pw3.remaining);
-
         return 0;
     }
     return 1;
@@ -749,12 +792,10 @@ uint16_t changeReferenceData(uint8_t mode) {
         }
 
         // Change PW1
+        pw1_length = (uint8_t) new_length;
         if (updatePIN(&pw1, buffer, pw1_length, (uint8_t) new_length) != 0) {
             return SW_UNKNOWN;
         }
-        ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, new_length), return SW_UNKNOWN);
-        pw1_length = (uint8_t) new_length;
-        ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return SW_UNKNOWN);
         pw1_modes[PW1_MODE_NO81] = 0;
         ERRORCHK(storeVar("PW1_MODE_NO81", pw1_modes[PW1_MODE_NO81], 0, 8), return SW_UNKNOWN);
         pw1_modes[PW1_MODE_NO82] = 0;
@@ -771,12 +812,11 @@ uint16_t changeReferenceData(uint8_t mode) {
         }
 
         // Change PW3
+        pw3_length = (uint8_t) new_length;
         if (updatePIN(&pw3, buffer, pw3_length, (uint8_t) new_length) != 0) {
             return SW_UNKNOWN;
         }
-        ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, new_length), return SW_UNKNOWN);
-        pw3_length = (uint8_t) new_length;
-        return storeVar("pw3_length", pw3_length, 0, 8);
+        return SW_NO_ERROR;
     } else {
         return SW_UNKNOWN;
     }
@@ -819,12 +859,10 @@ uint16_t resetRetryCounter(uint8_t mode) {
     }
 
     // Change PW1
+    pw1_length = (uint8_t) new_length;
     if (updatePIN(&pw1, buffer, offs, (uint8_t) new_length) != 0) {
         return SW_UNKNOWN;
     }
-    ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, new_length), return SW_UNKNOWN);
-    pw1_length = (uint8_t) new_length;
-    ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return SW_UNKNOWN);
     return SW_NO_ERROR;
 }
 
@@ -1062,13 +1100,15 @@ uint16_t sendPublicKey(mbedtls_rsa_context* key) {
  *            Generate key pair (80) or read public key (81)
  * @return Length of data written in buffer
  */
-uint16_t genAsymKey(uint8_t mode) {
+uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
     if (mode == (uint8_t) 0x80) {
         if (pw3.validated == 0) {
             return SW_SECURITY_STATUS_NOT_SATISFIED;
         }
 
-        keyGen(buffer[0]);
+        if (keyGen(buffer[0]) != 0) {
+            return SW_UNKNOWN;
+        }
 
         if (buffer[0] == (uint8_t) 0xB6) {
             bzero(ds_counter, sizeof(ds_counter));
@@ -1076,8 +1116,17 @@ uint16_t genAsymKey(uint8_t mode) {
         }
     }
 
+    uint8_t err;
+    mbedtls_rsa_context* key = getKey(buffer[0], &err);
+    if (err == 0) {
+        (*ret) = sendPublicKey(key);
+    } else {
+        (*ret) = 0;
+        return SW_UNKNOWN;
+    }
+
     // Output requested key
-    return sendPublicKey(getKey(buffer[0]));
+    return SW_NO_ERROR;
 }
 
 
@@ -1564,12 +1613,11 @@ uint16_t putData(uint16_t tag) {
             return storeVar("rc_length", rc_length, 0, 8);
         } else if (in_received >= RC_MIN_LENGTH
                 && in_received <= RC_MAX_LENGTH) {
+            rc_length = (uint8_t) in_received;
             if (updatePIN(&rc, buffer, 0, (uint8_t) in_received) != 0) {
                 return SW_UNKNOWN;
             }
-            ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, in_received), return SW_UNKNOWN);
-            rc_length = (uint8_t) in_received;
-            return storeVar("rc_length", rc_length, 0, 8);
+            return SW_NO_ERROR;
         } else {
             return SW_WRONG_DATA;
         }
@@ -1677,7 +1725,11 @@ uint16_t importKey() {
 
     // Get key for Control Reference Template
     uint8_t type = buffer[offset++];
-    mbedtls_rsa_context* key = getKey(type);
+    uint8_t err;
+    mbedtls_rsa_context* key = getKey(type, &err);
+    if (err != 0) {
+        return SW_UNKNOWN;
+    }
 
     // Skip empty length of CRT
     offset++;
@@ -1894,34 +1946,30 @@ uint16_t setPinRetries(uint8_t pin_retries, uint8_t reset_retries, uint8_t admin
         return SW_CONDITIONS_NOT_SATISFIED;
     }
     if (pin_retries != 0) {
+        pw1_length = (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0]);
         pw1.limit = pin_retries;
         ERRORCHK(storeVar("pw1_limit", pw1.limit, 0, 8), return SW_UNKNOWN);
-
-        if (updatePIN(&pw1, PW1_DEFAULT, 0, (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0])) != 0) {
+        if (updatePIN(&pw1, PW1_DEFAULT, 0, pw1_length) != 0) {
             return SW_UNKNOWN;
         }
-        pw1_length = (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0]);
-        ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length), return SW_UNKNOWN);
-        ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return SW_UNKNOWN);
         pw1_status = 0x00;
         ERRORCHK(storeVar("pw1_status", pw1_status, 0, 8), return SW_UNKNOWN);
     }
     if (reset_retries != 0) {
+        rc_length = 0;
         rc.limit = reset_retries;
         ERRORCHK(storeVar("rc_limit", rc.limit, 0, 8), return SW_UNKNOWN);
-        rc_length = 0;
-        ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return SW_UNKNOWN);
-    }
-    if (admin_retries != 0) {
-        pw3.limit = admin_retries;
-        ERRORCHK(storeVar("pw3_limit", pw3.limit, 0, 8), return SW_UNKNOWN);
-        if (updatePIN(&pw3, PW3_DEFAULT, 0, (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0])) != 0) {
+        if (updatePIN(&rc, &zero, 0, rc_length) != 0) {
             return SW_UNKNOWN;
         }
+    }
+    if (admin_retries != 0) {
         pw3_length = (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0]);
-        ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length), return SW_UNKNOWN);
-        ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return SW_UNKNOWN);
-
+        pw3.limit = admin_retries;
+        ERRORCHK(storeVar("pw3_limit", pw3.limit, 0, 8), return SW_UNKNOWN);
+        if (updatePIN(&pw3, PW3_DEFAULT, 0, pw3_length) != 0) {
+            return SW_UNKNOWN;
+        }
     }
     //JCSystem.requestObjectDeletion(); // Find out what this exactly does
     return SW_NO_ERROR;
@@ -2011,43 +2059,36 @@ uint8_t initialize() {
     pw1_modes[PW1_MODE_NO82] = 0;
     ERRORCHK(storeVar("PW1_MODE_NO82", pw1_modes[PW1_MODE_NO82], 0, 8), return 1);
 
+    pw1_length = (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0]);
     pw1.limit = PIN_LIMIT;
     ERRORCHK(storeVar("pw1_limit", pw1.limit, 0, 8), return 1);
-    pw1_length = (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0]);
-    ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
-    if (updatePIN(&pw1, PW1_DEFAULT, 0, (uint8_t) sizeof(PW1_DEFAULT)/sizeof(PW1_DEFAULT[0])) != 0) {
+    if (updatePIN(&pw1, PW1_DEFAULT, 0, pw1_length) != 0) {
         return 1;
     }
-    ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length), return 1);
     pw1_status = 0x00;
     ERRORCHK(storeVar("pw1_status", pw1_status, 0, 8), return 1);
 
+    rc_length = 0;
     rc.limit = PIN_LIMIT;
     ERRORCHK(storeVar("rc_limit", rc.limit, 0, 8), return 1);
-    rc_length = 0;
-    ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
-    rc.remaining = rc.limit;
-    ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
-    rc.validated = (uint8_t) 0;
-    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
-
-    pw3.limit = PIN_LIMIT;
-    ERRORCHK(storeVar("pw3_limit", pw3.limit, 0, 8), return 1);
-    pw3_length = (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0]);
-    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
-    if (updatePIN(&pw3, PW3_DEFAULT, 0, (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0])) != 0) {
+    if (updatePIN(&rc, &zero, 0, rc_length) != 0) {
         return 1;
     }
-    ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length), return 1);
+
+    pw3_length = (uint8_t) sizeof(PW3_DEFAULT)/sizeof(PW3_DEFAULT[0]);
+    pw3.limit = PIN_LIMIT;
+    ERRORCHK(storeVar("pw3_limit", pw3.limit, 0, 8), return 1);
+    if (updatePIN(&pw3, PW3_DEFAULT, 0, pw3_length) != 0) {
+        return 1;
+    }
 
     mbedtls_rsa_init(&sigKey, MBEDTLS_RSA_PKCS_V15, 0);
     isSigEmpty = 1;
-
     sigAttributes[1] = (uint8_t) (KEY_SIZE >> 8);
     sigAttributes[2] = (uint8_t) (KEY_SIZE & 0x00FF);
     sigAttributes[3] = (uint8_t) (EXPONENT_SIZE >> 8);
     sigAttributes[4] = (uint8_t) (EXPONENT_SIZE & 0x00FF);
-    ERRORCHK(storeBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigFP)), return 1);
+    ERRORCHK(storeBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigAttributes)), return 1);
     bzero(sigFP, sizeof(sigFP));
     ERRORCHK(storeBuf("/spiflash/sigFP.dat", sigFP, sizeof(sigFP)), return 1);
     bzero(sigTime, sizeof(sigTime));
@@ -2129,6 +2170,9 @@ uint8_t initialize() {
     bzero(private_use_do_4, PRIVATE_DO_MAX_LENGTH);
     ERRORCHK(storeBuf("/spiflash/privdo4.dat", private_use_do_4, private_use_do_4_length), return 1);
 
+    terminated = 0;
+    ERRORCHK(storeVar("terminated", terminated, 0, 8), return 1);
+
     ERRORCHK(storeVar("initialized", 1, 0, 8), return 1);
     ESP_LOGI(TAG, "SUCCESS");
 
@@ -2139,7 +2183,7 @@ void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
     uint16_t status = SW_NO_ERROR;
     uint16_t len = 0;
-    uint8_t ret;
+    uint16_t ret;
 
     if (apdu.INS == 0xA4) {
         // Reset PW1 modes
@@ -2147,7 +2191,7 @@ void process(apdu_t apdu, outData* output) {
         ERRORCHK(storeVar("PW1_MODE_NO81", pw1_modes[PW1_MODE_NO81], 0, 8), return);
         pw1_modes[PW1_MODE_NO82] = 0;
         ERRORCHK(storeVar("PW1_MODE_NO82", pw1_modes[PW1_MODE_NO82], 0, 8), return);
-
+        sendBuffer(apdu, 0, output);
         return;
     }
 
@@ -2187,7 +2231,6 @@ void process(apdu_t apdu, outData* output) {
         case (uint8_t) 0x2C:
             // Reset only available for PW1
             if (apdu.P2 != (uint8_t) 0x81) {
-                ESP_LOGE(TAG, "SW_INCORRECT_P1P2");
                 status = SW_INCORRECT_P1P2;
                 goto exit;
             }
@@ -2205,7 +2248,6 @@ void process(apdu_t apdu, outData* output) {
             else if (apdu.P1P2 == (uint16_t) 0x8086) {
                 status = decipher(&apdu.Le);
             } else {
-                ESP_LOGE(TAG, "SW_WRONG_P1P2");
                 status = SW_WRONG_P1P2;
                 goto exit;
             }
@@ -2218,7 +2260,7 @@ void process(apdu_t apdu, outData* output) {
 
         // GENERATE ASYMMETRIC KEY PAIR
         case (uint8_t) 0x47:
-            if ((ret = genAsymKey(apdu.P1)) != 0) {
+            if ((status = genAsymKey(apdu.P1, &ret)) == SW_NO_ERROR) {
                 apdu.Le = ret;
             }
             break;

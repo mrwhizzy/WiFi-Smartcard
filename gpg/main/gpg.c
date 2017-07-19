@@ -140,7 +140,9 @@ static void taskConnect(void *pvParameters) {
         nvs_close(nvsHandle);
         switch (err) {
             case ESP_OK:
-                restoreState();
+                if (restoreState() != 0) {
+                    goto exit;
+                }
                 break;
             case ESP_ERR_NVS_NOT_FOUND:
                 if (initialize() != 0) {
