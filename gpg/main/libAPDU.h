@@ -671,12 +671,14 @@ void resetChaining() {
 uint16_t commandChaining(apdu_t apdu){
     uint16_t len = apdu.Lc;
 
-    if (chain != 0) {
+    if (chain == 0) {
+        ESP_LOGE("chaining", "I failed here, 1");
         resetChaining();
     }
 
     if ((uint8_t) (apdu.CLA & (uint8_t) 0x10) == (uint8_t) 0x10) {
         // If chaining was already initiated, INS and P1P2 should match
+        ESP_LOGE("chaining", "I failed here, 2");
         if ((chain == 1) && (apdu.INS != chain_ins && apdu.P1P2 != chain_p1p2)) {
             resetChaining();
             return SW_CONDITIONS_NOT_SATISFIED;
@@ -684,6 +686,7 @@ uint16_t commandChaining(apdu_t apdu){
 
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
+            ESP_LOGE("chaining", "I failed here, 4");
             resetChaining();
             return SW_WRONG_DATA;
         }
@@ -701,9 +704,11 @@ uint16_t commandChaining(apdu_t apdu){
 
     if ((chain == 1) && (apdu.INS == chain_ins) && (apdu.P1P2 == chain_p1p2)) {
         chain = 0;
+        ESP_LOGE("chaining", "I failed here, 5");
 
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
+            ESP_LOGE("chaining", "I failed here, 6");
             resetChaining();
             return SW_WRONG_DATA;
         }
@@ -712,16 +717,18 @@ uint16_t commandChaining(apdu_t apdu){
         uint8_t* bufOffset = buffer + in_received;
         memcpy(bufOffset, apdu.data, len);
         in_received += len;
-        return SW_NO_ERROR;
+        return 0000;
     } else if (chain == 1) {
         // Chained command expected
+        ESP_LOGE("chaining", "I failed here, 7");
         resetChaining();
         return SW_UNKNOWN;
     } else {
         // No chaining was used, so copy data to buffer
+        ESP_LOGE("chaining", "I failed here, 8");
         memcpy(buffer, apdu.data, len);
         in_received = len;
-        return SW_NO_ERROR;
+        return 0000;
     }
 }
 
@@ -1887,6 +1894,8 @@ uint16_t importKey() {
         status = SW_UNKNOWN;
         goto cleanup;
     }
+    ESP_LOGI("importKey", "CHECK SUCCESS BEACH");   // TODO remove...
+
 
     // Store the key to the flash memory
     if (type == (uint8_t) 0xB6) {
@@ -2196,7 +2205,7 @@ void process(apdu_t apdu, outData* output) {
     }
 
     // Support for command chaining
-    if ((status = commandChaining(apdu)) != 0x9000){
+    if ((status = commandChaining(apdu)) != 0000){
         goto exit;
     }
 
