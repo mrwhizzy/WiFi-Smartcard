@@ -2,7 +2,7 @@ import SocketServer
 import time
 
 def sendAndGetResponse(self, command):
-    bytes = bytearray.fromhex(command)                             # GET DATA AID
+    bytes = bytearray.fromhex(command)
     self.request.sendall(bytes)
     print '\nCommand sent to {}:'.format(self.client_address[0])
     print ' '.join(format(n,'02X') for n in bytes)

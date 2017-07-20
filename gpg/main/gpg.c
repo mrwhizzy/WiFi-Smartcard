@@ -130,7 +130,7 @@ static void taskConnect(void *pvParameters) {
     unsigned char input[16];
     struct sockaddr_in serv_addr;
 
-    nvs_handle nvsHandle;
+    nvs_handle nvsHandle;       // Open NVS to check if the device has been initialized
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvsHandle);
     if (err != ESP_OK) {
         goto exit;
@@ -139,12 +139,12 @@ static void taskConnect(void *pvParameters) {
         err = nvs_get_u8(nvsHandle, "initialized", &initialized);
         nvs_close(nvsHandle);
         switch (err) {
-            case ESP_OK:
+            case ESP_OK:    // If it has been initialized, restore the data
                 if (restoreState() != 0) {
                     goto exit;
                 }
                 break;
-            case ESP_ERR_NVS_NOT_FOUND:
+            case ESP_ERR_NVS_NOT_FOUND:     // If not initialized, then initialize
                 if (initialize() != 0) {
                     goto exit;
                 }
@@ -163,6 +163,7 @@ static void taskConnect(void *pvParameters) {
         printf("Enter server IP address:\n");
         fflush(stdout);
         while (stat != OK) {
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
             stat = UartRxString(input, 15);         // Get server's IP address
         }
         if (input[0] == 'x') {                      // If 'x', then reboot
@@ -178,14 +179,14 @@ static void taskConnect(void *pvParameters) {
 
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
-            ESP_LOGE(TAG, "... Failed to allocate socket.");
+            ESP_LOGE(TAG, "... Failed to allocate socket");
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             continue;
         }
         ESP_LOGI(TAG, "... allocated socket\r\n");
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
-            ESP_LOGE(TAG, "... socket connect failed errno=%d", errno);
+            ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
             close(sockfd);
             vTaskDelay(4000 / portTICK_PERIOD_MS);
             goto exit;
@@ -193,9 +194,9 @@ static void taskConnect(void *pvParameters) {
         ESP_LOGI(TAG, "... connected");
 
         while(1) {
-            bzero(recvBuf, sizeof(recvBuf));
-            r = read(sockfd, recvBuf, sizeof(recvBuf)-1);
-            comAPDU = parseAPDU(recvBuf, r);
+            bzero(recvBuf, sizeof(recvBuf));                // Zero the receive buffer
+            r = read(sockfd, recvBuf, sizeof(recvBuf)-1);   // Receive the APDU command
+            comAPDU = parseAPDU(recvBuf, r);                // Parse the APDE command
 
 #ifdef PRINTAPDU
             printf("CLA: %02X\tINS: %02X\tP1: %02X\t", comAPDU.CLA, comAPDU.INS, comAPDU.P1);
@@ -207,7 +208,7 @@ static void taskConnect(void *pvParameters) {
             fflush(stdout);
 #endif
 
-            process(comAPDU, &output);
+            process(comAPDU, &output);          // Perform the appropriate operation
 
 #ifdef PRINTAPDU
             printf("Output Data: ");
@@ -218,7 +219,7 @@ static void taskConnect(void *pvParameters) {
             fflush(stdout);
 #endif
 
-            if (write(sockfd, output.data, output.length) < 0) {
+            if (write(sockfd, output.data, output.length) < 0) {    // Send the response
                 ESP_LOGE(TAG, "... socket send failed");
                 close(sockfd);
                 vTaskDelay(4000 / portTICK_PERIOD_MS);
@@ -226,25 +227,23 @@ static void taskConnect(void *pvParameters) {
             }
             ESP_LOGI(TAG, "... socket send success");
         }
+    }
 
-        close(sockfd);
-        ESP_LOGI(TAG, "... done reading from socket. Last read return=%d errno=%d\r\n", r, errno);
+exit:
         for (int countdown = 3; countdown > 0; countdown--) {
-            ESP_LOGI(TAG, "%d... ", countdown);
+            ESP_LOGI(TAG, "Restart in: %d... ", countdown);
             vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
-        ESP_LOGI(TAG, "Starting again!");
-    }
-exit:
+        ESP_LOGI(TAG, "Starting again");
         unmountFS();
         esp_restart();
 }
 
 void app_main() {
+    initNVS();
     if (!mountFS()) {
         exit(0);
     }
-    initNVS();
     initWiFi();
     xTaskCreate(&taskConnect, "taskConnect", 8192, NULL, 5, NULL);
 }

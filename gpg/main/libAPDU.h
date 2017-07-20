@@ -208,6 +208,39 @@ uint16_t chain_p1p2 = 0;
 
 uint8_t terminated = 0; // false
 
+
+/**
+ * Parse the receive buffer to an APDU struct.
+ *
+ * @param recvBuf The receive buffer
+ * @param n The length of the buffer
+ */
+apdu_t parseAPDU(char* recvBuf, int n){
+    apdu_t newAPDU;
+
+    newAPDU.Lc = 0;
+    newAPDU.Le = 0;
+    bzero(newAPDU.data, sizeof(newAPDU.data));
+
+    newAPDU.CLA = recvBuf[0];
+    newAPDU.INS = recvBuf[1];
+    newAPDU.P1 = recvBuf[2];
+    newAPDU.P2 = recvBuf[3];
+    newAPDU.P1P2 = newAPDU.P1 << 8 | newAPDU.P2;
+    if (n == 5) {           // Le
+        newAPDU.Le = (uint16_t) (0xFF & recvBuf[4]);
+    } else if (n > 5) {
+        newAPDU.Lc = (uint16_t) (0xFF & recvBuf[4]);
+        if (n > 5 + newAPDU.Lc) {   // Lc | Data | Le
+            newAPDU.Le = (uint16_t) (0xFF & recvBuf[5+newAPDU.Lc]);
+            memcpy(newAPDU.data, (recvBuf+5), n-6);
+        } else {                // Lc | Data
+            memcpy(newAPDU.data, (recvBuf+5), n-5);
+        }
+    }
+    return newAPDU;
+}
+
 uint16_t storeVar(char* key, uint8_t val8, uint16_t val16, uint8_t mode) {
     nvs_handle nvsHandle;
     if (nvs_open("storage", NVS_READWRITE, &nvsHandle) != ESP_OK) {
@@ -248,31 +281,6 @@ uint16_t storeBuf(char* key, uint8_t* ptr, uint16_t len) {
     return SW_NO_ERROR;
 }
 
-uint8_t updatePINattr() {
-    ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
-    ERRORCHK(storeVar("pw1_remaining", pw1.remaining, 0, 8), return 1);
-    ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
-    ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
-
-    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
-    ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
-    ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
-    ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, rc_length+1), return 1);
-
-    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
-    ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
-    ERRORCHK(storeVar("pw3_remaining", pw3.remaining, 0, 8), return 1);
-    ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
-    return 0;
-}
-
-uint8_t updateKeyStatus() {
-    ERRORCHK(storeVar("isSigEmpty", isSigEmpty, 0, 8), return 1);
-    ERRORCHK(storeVar("isDecEmpty", isDecEmpty, 0, 8), return 1);
-    ERRORCHK(storeVar("isAuthEmpty", isAuthEmpty, 0, 8), return 1);
-    return 0;
-}
-
 uint16_t restoreVar(char* key, uint8_t* val8, uint16_t* val16, uint8_t mode) {
     nvs_handle nvsHandle;
     if (nvs_open("storage", NVS_READWRITE, &nvsHandle) != ESP_OK) {
@@ -302,149 +310,6 @@ uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
     fread(ptr, sizeof(uint8_t), len, fp);
     fclose(fp);
     return SW_NO_ERROR;
-}
-
-/**
- * Parse the receive buffer to an APDU struct.
- *
- * @param recvBuf The receive buffer
- * @param n The length of the buffer
- */
-apdu_t parseAPDU(char* recvBuf, int n){
-    apdu_t newAPDU;
-
-    newAPDU.Lc = 0;
-    newAPDU.Le = 0;
-    bzero(newAPDU.data, sizeof(newAPDU.data));
-
-    newAPDU.CLA = recvBuf[0];
-    newAPDU.INS = recvBuf[1];
-    newAPDU.P1 = recvBuf[2];
-    newAPDU.P2 = recvBuf[3];
-    newAPDU.P1P2 = newAPDU.P1 << 8 | newAPDU.P2;
-    if (n == 5) {           // Le
-        newAPDU.Le = (uint16_t) (0xFF & recvBuf[4]);
-    } else if (n > 5) {
-        newAPDU.Lc = (uint16_t) (0xFF & recvBuf[4]);
-        if (n > 5 + newAPDU.Lc) {   // Lc | Data | Le
-            newAPDU.Le = (uint16_t) (0xFF & recvBuf[5+newAPDU.Lc]);
-            memcpy(newAPDU.data, (recvBuf+5), n-6);
-        } else {                // Lc | Data
-            memcpy(newAPDU.data, (recvBuf+5), n-5);
-        }
-    }
-    return newAPDU;
-}
-
-/**
- * Return the key of the type requested:
- * - B6: Digital signatures
- * - B8: Confidentiality
- * - A4: Authentication
- *
- * @param type
- *            Type of key to be returned
- * @return Key of requested type
- */
-mbedtls_rsa_context* getKey(uint8_t type, uint8_t* err) {
-    static const char *TAG = "getKey";
-    mbedtls_rsa_context* key = &sigKey;
-    (*err) = 0;
-
-    if (type == (uint8_t) 0xB6) {
-        key = &sigKey;
-    } else if (type == (uint8_t) 0xB8) {
-        key = &decKey;
-    } else if (type == (uint8_t) 0xA4) {
-        key = &authKey;
-    } else {
-        ESP_LOGE(TAG, "SW_UNKNOWN");
-        (*err) = 1;
-    }
-
-    return key;
-}
-
-int keyGen(uint8_t type) {
-    static const char* TAG = "keyGen";
-
-    int ret;
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_rsa_context* key;
-    FILE* fpriv = NULL;
-    uint8_t* isEmpty;
-    const char* pers = "keyGen";
-
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-    mbedtls_entropy_init(&entropy);
-    if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-                               (const unsigned char *) pers, strlen(pers))) != 0) {
-        ESP_LOGE(TAG, "\nError:\tmbedtls_ctr_drbg_seed returned %d\n", ret);
-        goto exitKG;
-    }
-
-    if (type == (uint8_t) 0xB6) {
-        key = &sigKey;
-        isEmpty = &isSigEmpty;
-        if ((fpriv = fopen("/spiflash/sigKey.dat", "wb")) == NULL) {
-            ret = 1;
-            goto exitKG;
-        }
-    } else if (type == (uint8_t) 0xB8) {
-        key = &decKey;
-        isEmpty = &isDecEmpty;
-        if ((fpriv = fopen("/spiflash/decKey.dat", "wb")) == NULL) {
-            ret = 1;
-            goto exitKG;
-        }
-    } else if (type == (uint8_t) 0xA4) {
-        key = &authKey;
-        isEmpty = &isAuthEmpty;
-        if ((fpriv = fopen("/spiflash/authKey.dat", "wb")) == NULL) {
-            ret = 1;
-            goto exitKG;
-        }
-    } else {
-        ret = 1;
-        goto exitKG;
-    }
-
-    if ((ret = mbedtls_rsa_gen_key(key, mbedtls_ctr_drbg_random, &ctr_drbg, KEY_SIZE, EXPONENT)) != 0){
-        ESP_LOGE(TAG, "\nError:\tmbedtls_rsa_gen_key returned %d\n\n", ret);
-        goto exitKG;
-    }
-
-    if ((ret = mbedtls_mpi_write_file("N = " , &key->N , 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("E = " , &key->E , 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("D = " , &key->D , 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("P = " , &key->P , 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("Q = " , &key->Q , 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("DP = ", &key->DP, 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("DQ = ", &key->DQ, 16, fpriv)) != 0 ||
-        (ret = mbedtls_mpi_write_file("QP = ", &key->QP, 16, fpriv)) != 0) {
-        ESP_LOGE(TAG, "\nError:\tmbedtls_mpi_write_file returned %d\n\n", ret);
-        fclose(fpriv);
-        goto exitKG;
-    }
-    fclose(fpriv);
-
-    if (mbedtls_rsa_check_privkey(key) != 0) {
-        ESP_LOGE("keyGen", "Failed hard");
-        ret = 1;
-        goto exitKG;
-    }
-    (*isEmpty) = 0;
-    if (updateKeyStatus() != 0) {
-        ret = 1;
-        goto exitKG;
-    }
-    ret = 0;
-
-exitKG:
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
-    return ret;
 }
 
 // Function just to read and print the keys from the flash storage
@@ -492,27 +357,17 @@ uint8_t readKey(uint8_t type) {
     key->len = ret;
 
     if (mbedtls_rsa_check_privkey(key) != 0) {
-        ESP_LOGE("readKey", "Failed hard");
+        ESP_LOGE(TAG, "Failed hard");
         ret = 1;
         goto exitRK;
     }
-
-    // for testing purposes
-    rewind(f);
-    char line[2048];
-    size_t newLen = fread(line, sizeof(char), 2048, f);
-    if (newLen != 0) {
-        line[++newLen] = '\0';
-    }
-    fclose(f);
-    ESP_LOGI(TAG, "Read from key file:\n%s\n", line);
-    // these purposes end here
 
 exitRK:
     return ret;
 }
 
 uint8_t restoreState() {
+    static const char* TAG = "restoreState";
     fflush(stdout);
 
     bzero(buffer, sizeof(buffer));
@@ -538,9 +393,7 @@ uint8_t restoreState() {
     ERRORCHK(restoreVar("pw3_remaining", &pw3.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
-    ESP_LOGI("restore", "Sig is: %d", isSigEmpty);
     if (isSigEmpty == 0) {
-        ESP_LOGI("restore", "do I?");
         readKey(0xB6);
     }
     ERRORCHK(restoreBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigAttributes)), return 1);
@@ -548,7 +401,6 @@ uint8_t restoreState() {
     ERRORCHK(restoreBuf("/spiflash/sigTime.dat", sigTime, sizeof(sigTime)), return 1);
 
     ERRORCHK(restoreVar("isDecEmpty", &isDecEmpty, 0, 8), return 1);
-    ESP_LOGI("restore", "Dec is: %d", isDecEmpty);
     if (isDecEmpty == 0) {
         readKey(0xB8);
     }
@@ -557,7 +409,6 @@ uint8_t restoreState() {
     ERRORCHK(restoreBuf("/spiflash/decTime.dat", decTime, sizeof(decTime)), return 1);
 
     ERRORCHK(restoreVar("isAuthEmpty", &isAuthEmpty, 0, 8), return 1);
-    ESP_LOGI("restore", "Auth is: %d", isAuthEmpty);
     if (isAuthEmpty == 0) {
         readKey(0xA4);
     }
@@ -596,7 +447,25 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("terminated", &terminated, 0, 8), return 1);
 
-    ESP_LOGI("restoreState", "SUCCESS");
+    ESP_LOGI(TAG, "SUCCESS");
+    return 0;
+}
+
+uint8_t updatePINattr() {
+    ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
+    ERRORCHK(storeVar("pw1_remaining", pw1.remaining, 0, 8), return 1);
+    ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
+
+    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
+    ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
+    ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, rc_length+1), return 1);
+
+    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
+    ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
+    ERRORCHK(storeVar("pw3_remaining", pw3.remaining, 0, 8), return 1);
+    ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
     return 0;
 }
 
@@ -1051,7 +920,7 @@ uint16_t internalAuthenticate(uint16_t* length) {
 uint16_t sendPublicKey(mbedtls_rsa_context* key) {
     // Build message in buffer
     uint16_t offset = 0;
-// TODO FIX
+
     buffer[offset++] = 0x7F;
     buffer[offset++] = 0x49;
     buffer[offset++] = (uint8_t) 0x82;
@@ -1084,8 +953,126 @@ uint16_t sendPublicKey(mbedtls_rsa_context* key) {
 
     buffer[offsetForLength] = (uint8_t) ((offset - offsetForLength - 2) >> 8);
     buffer[offsetForLength+1] = (uint8_t) ((offset - offsetForLength - 2) & 0x00FF);
-    ESP_LOGE("sendPubKey", "offset: %d", offset);
+
     return offset;
+}
+
+uint8_t updateKeyStatus() {
+    ERRORCHK(storeVar("isSigEmpty", isSigEmpty, 0, 8), return 1);
+    ERRORCHK(storeVar("isDecEmpty", isDecEmpty, 0, 8), return 1);
+    ERRORCHK(storeVar("isAuthEmpty", isAuthEmpty, 0, 8), return 1);
+    return 0;
+}
+
+int keyGen(uint8_t type) {
+    static const char* TAG = "keyGen";
+
+    int ret;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context* key;
+    FILE* fpriv = NULL;
+    uint8_t* isEmpty;
+    const char* pers = "keyGen";
+
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_init(&entropy);
+    if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                               (const unsigned char *) pers, strlen(pers))) != 0) {
+        ESP_LOGE(TAG, "\nError:\tmbedtls_ctr_drbg_seed returned %d\n", ret);
+        goto exitKG;
+    }
+
+    if (type == (uint8_t) 0xB6) {
+        key = &sigKey;
+        isEmpty = &isSigEmpty;
+        if ((fpriv = fopen("/spiflash/sigKey.dat", "wb")) == NULL) {
+            ret = 1;
+            goto exitKG;
+        }
+    } else if (type == (uint8_t) 0xB8) {
+        key = &decKey;
+        isEmpty = &isDecEmpty;
+        if ((fpriv = fopen("/spiflash/decKey.dat", "wb")) == NULL) {
+            ret = 1;
+            goto exitKG;
+        }
+    } else if (type == (uint8_t) 0xA4) {
+        key = &authKey;
+        isEmpty = &isAuthEmpty;
+        if ((fpriv = fopen("/spiflash/authKey.dat", "wb")) == NULL) {
+            ret = 1;
+            goto exitKG;
+        }
+    } else {
+        ret = 1;
+        goto exitKG;
+    }
+
+    if ((ret = mbedtls_rsa_gen_key(key, mbedtls_ctr_drbg_random, &ctr_drbg, KEY_SIZE, EXPONENT)) != 0){
+        ESP_LOGE(TAG, "\nError:\tmbedtls_rsa_gen_key returned %d\n\n", ret);
+        goto exitKG;
+    }
+
+    if ((ret = mbedtls_mpi_write_file("N = " , &key->N , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("E = " , &key->E , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("D = " , &key->D , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("P = " , &key->P , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("Q = " , &key->Q , 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("DP = ", &key->DP, 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("DQ = ", &key->DQ, 16, fpriv)) != 0 ||
+        (ret = mbedtls_mpi_write_file("QP = ", &key->QP, 16, fpriv)) != 0) {
+        ESP_LOGE(TAG, "\nError:\tmbedtls_mpi_write_file returned %d\n\n", ret);
+        fclose(fpriv);
+        goto exitKG;
+    }
+    fclose(fpriv);
+
+    if (mbedtls_rsa_check_privkey(key) != 0) {
+        ESP_LOGE("keyGen", "Failed hard");
+        ret = 1;
+        goto exitKG;
+    }
+    (*isEmpty) = 0;
+    if (updateKeyStatus() != 0) {
+        ret = 1;
+        goto exitKG;
+    }
+    ret = 0;
+
+exitKG:
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+    return ret;
+}
+
+/**
+ * Return the key of the type requested:
+ * - B6: Digital signatures
+ * - B8: Confidentiality
+ * - A4: Authentication
+ *
+ * @param type
+ *            Type of key to be returned
+ * @return Key of requested type
+ */
+mbedtls_rsa_context* getKey(uint8_t type, uint8_t* err) {
+    static const char *TAG = "getKey";
+    mbedtls_rsa_context* key = &sigKey;
+    (*err) = 0;
+
+    if (type == (uint8_t) 0xB6) {
+        key = &sigKey;
+    } else if (type == (uint8_t) 0xB8) {
+        key = &decKey;
+    } else if (type == (uint8_t) 0xA4) {
+        key = &authKey;
+    } else {
+        ESP_LOGE(TAG, "SW_UNKNOWN");
+        (*err) = 1;
+    }
+
+    return key;
 }
 
 /**
@@ -1121,14 +1108,13 @@ uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
 
     uint8_t err;
     mbedtls_rsa_context* key = getKey(buffer[0], &err);
-    if (err == 0) {
-        (*ret) = sendPublicKey(key);
-    } else {
+    if (err != 0) {
         (*ret) = 0;
         return SW_UNKNOWN;
     }
-
+    
     // Output requested key
+    (*ret) = sendPublicKey(key);
     return SW_NO_ERROR;
 }
 
@@ -1891,9 +1877,6 @@ uint16_t importKey() {
         goto cleanup;
     }
 
-    ESP_LOGI("importKey", "isSigEmpty %d", isSigEmpty);
-    ESP_LOGI("importKey", "isDecEmpty %d", isDecEmpty);
-    ESP_LOGI("importKey", "isAuthEmpty %d", isAuthEmpty);
     // Store the key to the flash memory
     if (type == (uint8_t) 0xB6) {
         isEmpty = &isSigEmpty;
@@ -1937,9 +1920,6 @@ uint16_t importKey() {
     if (updateKeyStatus() != 0) {
         return 1;
     }
-    ESP_LOGI("importKey", "isSigEmpty %d", isSigEmpty);
-    ESP_LOGI("importKey", "isDecEmpty %d", isDecEmpty);
-    ESP_LOGI("importKey", "isAuthEmpty %d", isAuthEmpty);
 
     status = SW_NO_ERROR;
 
@@ -1992,9 +1972,6 @@ uint16_t setPinRetries(uint8_t pin_retries, uint8_t reset_retries, uint8_t admin
  * @param output The struct that will hold the output
  */
 uint16_t sendNext(apdu_t apdu, uint16_t status, outData* output) {
-    ESP_LOGE("SEND NEXT", "out_sent %d", out_sent);
-    ESP_LOGE("SEND NEXT", "out_left %d", out_left);
-
     uint8_t* bufOffset;
 
     // Determine maximum size of the messages
@@ -2319,7 +2296,7 @@ void process(apdu_t apdu, outData* output) {
                 initialize();
                 terminated = 0;
                 status = storeVar("terminated", terminated, 0, 8);
-                //JCSystem.requestObjectDeletion(); // Find out what this exactly does
+                //JCSystem.requestObjectDeletion();     // Find out what this exactly does
             } else {
                 status = SW_CONDITIONS_NOT_SATISFIED;
             }
@@ -2345,15 +2322,12 @@ void process(apdu_t apdu, outData* output) {
             ESP_LOGE(TAG, "Failed to process APDU");
     }
 exit:
-    ESP_LOGE("process", "apdu INS %02X", apdu.INS);
-    ESP_LOGE("process", "status %04X", status);
     if (status != (uint16_t) 0x9000) {
         // Send the exception that was thrown
         sendError(apdu, status, output);
     } else {
         // GET RESPONSE
         if (apdu.INS == (uint8_t) 0xC0) {
-            ESP_LOGE("GET RESPONSE", "buffer[0] %d", buffer[0]);
             sendNext(apdu, SW_NO_ERROR, output);
         } else {
             sendBuffer(apdu, len, output);
