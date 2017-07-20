@@ -316,49 +316,52 @@ uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
 uint8_t readKey(uint8_t type) {
     static const char *TAG = "readKey";
     mbedtls_rsa_context* key;
-    uint16_t ret = 0;
+    uint16_t ret = SW_NO_ERROR;
     FILE *f;
 
     if (type == (uint8_t) 0xB6) {
         key = &sigKey;
         if ((f = fopen("/spiflash/sigKey.dat", "rb")) == NULL) {
+            ret = SW_UNKNOWN;
             goto exitRK;
         }
     } else if (type == (uint8_t) 0xB8) {
         key = &decKey;
         if ((f = fopen("/spiflash/decKey.dat", "rb")) == NULL) {
+            ret = SW_UNKNOWN;
             goto exitRK;
         }
     } else if (type == (uint8_t) 0xA4) {
         key = &authKey;
         if ((f = fopen("/spiflash/authKey.dat", "rb")) == NULL) {
+            ret = SW_UNKNOWN;
             goto exitRK;
         }
     } else {
         ESP_LOGE(TAG, "Some error must have happened");
+        ret = SW_UNKNOWN;
         goto exitRK;
     }
 
-    if ((ret = mbedtls_mpi_read_file(&key->N , 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->E , 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->D , 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->P , 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->Q , 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->DP, 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->DQ, 16, f)) != 0 ||
-        (ret = mbedtls_mpi_read_file(&key->QP, 16, f)) != 0) {
-        ESP_LOGE(TAG, "\nError:\tmbedtls_mpi_read_file returned %d\n\n", ret);
+    if ((mbedtls_mpi_read_file(&key->N , 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->E , 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->D , 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->P , 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->Q , 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->DP, 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->DQ, 16, f) != 0) ||
+        (mbedtls_mpi_read_file(&key->QP, 16, f) != 0)) {
+        ESP_LOGE(TAG, "\nError:\tmbedtls_mpi_read_file failed");
+        ret = SW_UNKNOWN;
         fclose(f);
         goto exitRK;
     }
 
-    //ret = mbedtls_mpi_size(&key->N);
-    ret = (mbedtls_mpi_bitlen(&key->N) + 7) >> 3;
-    key->len = ret;
+    key->len = (mbedtls_mpi_bitlen(&key->N) + 7) >> 3;
 
     if (mbedtls_rsa_check_privkey(key) != 0) {
         ESP_LOGE(TAG, "Failed hard");
-        ret = 1;
+        ret = SW_UNKNOWN;
         goto exitRK;
     }
 

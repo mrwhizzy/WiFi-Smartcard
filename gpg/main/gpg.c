@@ -15,6 +15,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "rom/uart.h"
+#include "driver/gpio.h"
 
 #include "lwip/err.h"
 #include "lwip/sockets.h"
@@ -27,8 +28,8 @@
 #include "netlist.h"
 #include "libAPDU.h"
 
-
-#define PRINTAPDU     // If defined, APDU info is printed
+#define PORT 5511       // The default port of this protocol
+#define PRINTAPDU       // If defined, APDU info is printed
 
 // FreeRTOS event group to signal when we are connected & ready to make a request
 static EventGroupHandle_t wifi_event_group;
@@ -44,43 +45,36 @@ static wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
 // Mount path for the partition
 const char *base_path = "/spiflash";
 
-static esp_err_t event_handler(void *ctx, system_event_t *event) {
-    static const char *TAG = "event_handler";
+uint8_t toggle = 0;     // Toggle for Wi-Fi status LED
+uint8_t proceed = 0;    // When the proceed button is pressed, proceed is set
 
-    switch(event->event_id) {
-    case SYSTEM_EVENT_STA_START:
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
-        ESP_ERROR_CHECK(esp_wifi_connect());
-        break;
-    case SYSTEM_EVENT_STA_GOT_IP:
-        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        break;
-    case SYSTEM_EVENT_STA_DISCONNECTED:
-        ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[nextNet]).sta.ssid);
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
-        nextNet = (nextNet + 1) % NUMOFNETS;
-        ESP_ERROR_CHECK(esp_wifi_connect());
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-        break;
-    default:
-        break;
-    }
-    return ESP_OK;
+void proceedHandle(void* arg) {
+    proceed = 1;
 }
 
-static void initWiFi(void) {
-    nextNet = 0;        // Attempt to connect to this network next 
+void initGPIO() {
+    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // Wi-Fi status LED
+    gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);      // Processing status LED
 
-    tcpip_adapter_init();
-    wifi_event_group = xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+    gpio_set_direction(GPIO_NUM_16, GPIO_MODE_INPUT);       // Proceed button
+    gpio_set_intr_type(GPIO_NUM_16, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
+    gpio_set_pull_mode(GPIO_NUM_16, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
+    gpio_install_isr_service(0);                            // Install GPIO interrupt service
+    gpio_isr_handler_add(GPIO_NUM_16, proceedHandle, (void*) GPIO_NUM_16);   // Hook ISR handler
+}
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    esp_wifi_set_ps(WIFI_PS_NONE);
+void initNVS() {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        // NVS partition was truncated and needs to be erased
+        const esp_partition_t* nvs_partition = esp_partition_find_first(
+                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+        assert(nvs_partition && "partition table must have an NVS partition");
+        ESP_ERROR_CHECK(esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
+        // Retry nvs_flash_init
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
 }
 
 uint8_t mountFS() {
@@ -105,29 +99,60 @@ void unmountFS() {
     ESP_LOGI(TAG, "Done");
 }
 
-void initNVS() {
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-        // NVS partition was truncated and needs to be erased
-        const esp_partition_t* nvs_partition = esp_partition_find_first(
-                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
-        assert(nvs_partition && "partition table must have an NVS partition");
-        ESP_ERROR_CHECK(esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
-        // Retry nvs_flash_init
-        err = nvs_flash_init();
+static esp_err_t event_handler(void *ctx, system_event_t *event) {
+    static const char *TAG = "event_handler";
+
+    switch(event->event_id) {
+    case SYSTEM_EVENT_STA_START:
+        gpio_set_level(GPIO_NUM_26, toggle);    // Not connected to a network
+        currNet = nextNet;
+        ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[currNet]).sta.ssid);
+        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[currNet]));
+        nextNet = (nextNet + 1) % NUMOFNETS;
+        ESP_ERROR_CHECK(esp_wifi_connect());
+        break;
+    case SYSTEM_EVENT_STA_GOT_IP:
+        gpio_set_level(GPIO_NUM_26, 1);         // Connected to a network
+        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
+        break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        toggle ^= 1;
+        gpio_set_level(GPIO_NUM_26, toggle);    // Not connected to a network
+        currNet = nextNet;
+        ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[nextNet]).sta.ssid);
+        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
+        nextNet = (nextNet + 1) % NUMOFNETS;
+        ESP_ERROR_CHECK(esp_wifi_connect());
+        break;
+    default:
+        break;
     }
-    ESP_ERROR_CHECK(err);
+    return ESP_OK;
+}
+
+static void initWiFi(void) {
+    nextNet = 0;        // Attempt to connect to this network next
+
+    tcpip_adapter_init();
+    wifi_event_group = xEventGroupCreate();
+    ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    esp_wifi_set_ps(WIFI_PS_NONE);
 }
 
 static void taskConnect(void *pvParameters) {
     static const char *TAG = "taskConnect";
 
-    STATUS stat;
     int sockfd, r;
     apdu_t comAPDU;
     outData output;
     char recvBuf[1024];
-    unsigned char input[16];
     struct sockaddr_in serv_addr;
 
     nvs_handle nvsHandle;       // Open NVS to check if the device has been initialized
@@ -138,8 +163,9 @@ static void taskConnect(void *pvParameters) {
         uint8_t initialized = 0;
         err = nvs_get_u8(nvsHandle, "initialized", &initialized);
         nvs_close(nvsHandle);
+        gpio_set_level(GPIO_NUM_25, 1);     // Initialize/restore start
         switch (err) {
-            case ESP_OK:    // If it has been initialized, restore the data
+            case ESP_OK:    // If it has already been initialized, restore the data
                 if (restoreState() != 0) {
                     goto exit;
                 }
@@ -152,6 +178,7 @@ static void taskConnect(void *pvParameters) {
             default :
                 goto exit;
         }
+        gpio_set_level(GPIO_NUM_25, 0);     // Initialize/restore end
     }
 
     while(1) {
@@ -159,28 +186,21 @@ static void taskConnect(void *pvParameters) {
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
         ESP_LOGI(TAG, "Connected to AP");
 
-        stat = PENDING;
-        printf("Enter server IP address:\n");
+        printf("Press the proceed button to connect to: %s\n", IP[currNet]);
         fflush(stdout);
-        while (stat != OK) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            stat = UartRxString(input, 15);         // Get server's IP address
+        while (proceed == 0) {
+            vTaskDelay(1000/portTICK_PERIOD_MS);
         }
-        if (input[0] == 'x') {                      // If 'x', then reboot
-            goto exit;
-        }
-        input[strlen((char*) input) - 1] = '\0';    // Strip newline char
-        ESP_LOGI(TAG, "IP is: %d\t%s\n", strlen((char*) input), input);
+        proceed = 0;
 
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(5511);
-        //serv_addr.sin_addr.s_addr = inet_addr((char*)input);
-        serv_addr.sin_addr.s_addr = inet_addr("10.42.0.1");     // Temporarily...
+        serv_addr.sin_port = htons(PORT);
+        serv_addr.sin_addr.s_addr = inet_addr(IP[currNet]);
 
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
             ESP_LOGE(TAG, "... Failed to allocate socket");
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            vTaskDelay(1000/portTICK_PERIOD_MS);
             continue;
         }
         ESP_LOGI(TAG, "... allocated socket\r\n");
@@ -188,7 +208,7 @@ static void taskConnect(void *pvParameters) {
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
             ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
             close(sockfd);
-            vTaskDelay(4000 / portTICK_PERIOD_MS);
+            vTaskDelay(1000/portTICK_PERIOD_MS);
             goto exit;
         }
         ESP_LOGI(TAG, "... connected");
@@ -208,7 +228,9 @@ static void taskConnect(void *pvParameters) {
             fflush(stdout);
 #endif
 
+            gpio_set_level(GPIO_NUM_25, 1);     // Start processing a command
             process(comAPDU, &output);          // Perform the appropriate operation
+            gpio_set_level(GPIO_NUM_25, 0);     // End of command processing
 
 #ifdef PRINTAPDU
             printf("Output Data: ");
@@ -222,7 +244,7 @@ static void taskConnect(void *pvParameters) {
             if (write(sockfd, output.data, output.length) < 0) {    // Send the response
                 ESP_LOGE(TAG, "... socket send failed");
                 close(sockfd);
-                vTaskDelay(4000 / portTICK_PERIOD_MS);
+                vTaskDelay(1000/portTICK_PERIOD_MS);
                 goto exit;
             }
             ESP_LOGI(TAG, "... socket send success");
@@ -232,7 +254,7 @@ static void taskConnect(void *pvParameters) {
 exit:
         for (int countdown = 3; countdown > 0; countdown--) {
             ESP_LOGI(TAG, "Restart in: %d... ", countdown);
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            vTaskDelay(1000/portTICK_PERIOD_MS);
         }
         ESP_LOGI(TAG, "Starting again");
         unmountFS();
@@ -240,6 +262,7 @@ exit:
 }
 
 void app_main() {
+    initGPIO();
     initNVS();
     if (!mountFS()) {
         exit(0);

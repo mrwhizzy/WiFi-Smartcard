@@ -17,6 +17,7 @@ wifi_config_t wifiConfig1 = {
         .password = "12345678",
     },
 };
+char IP1[] = "10.42.0.1";
 
 wifi_config_t wifiConfig2 = {
     .sta = {
@@ -24,6 +25,7 @@ wifi_config_t wifiConfig2 = {
         .password = "12345678",
     },
 };
+char IP2[] = "10.42.0.1";
 
 wifi_config_t wifiConfig3 = {
     .sta = {
@@ -31,6 +33,7 @@ wifi_config_t wifiConfig3 = {
         .password = "testTest",
     },
 };
+char IP3[] = "10.42.0.1";
 
 wifi_config_t wifiConfig4 = {
     .sta = {
@@ -38,11 +41,17 @@ wifi_config_t wifiConfig4 = {
         .password = "foobarbaz",
     },
 };
+char IP4[] = "10.42.0.1";
 
-wifi_config_t *wifiConfig[NUMOFNETS] = { 
+
+wifi_config_t* wifiConfig[NUMOFNETS] = { 
     &wifiConfig1, &wifiConfig2, &wifiConfig3, &wifiConfig4
 };
 
-int nextNet;
+char* IP[NUMOFNETS] = { 
+    IP1, IP2, IP3, IP4
+};
+
+int nextNet, currNet;
 
 #endif
