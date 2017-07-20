@@ -538,6 +538,7 @@ uint8_t restoreState() {
     ERRORCHK(restoreVar("pw3_remaining", &pw3.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
+    ESP_LOGI("restore", "Sig is: %d", isSigEmpty);
     if (isSigEmpty == 0) {
         ESP_LOGI("restore", "do I?");
         readKey(0xB6);
@@ -547,6 +548,7 @@ uint8_t restoreState() {
     ERRORCHK(restoreBuf("/spiflash/sigTime.dat", sigTime, sizeof(sigTime)), return 1);
 
     ERRORCHK(restoreVar("isDecEmpty", &isDecEmpty, 0, 8), return 1);
+    ESP_LOGI("restore", "Dec is: %d", isDecEmpty);
     if (isDecEmpty == 0) {
         readKey(0xB8);
     }
@@ -555,6 +557,7 @@ uint8_t restoreState() {
     ERRORCHK(restoreBuf("/spiflash/decTime.dat", decTime, sizeof(decTime)), return 1);
 
     ERRORCHK(restoreVar("isAuthEmpty", &isAuthEmpty, 0, 8), return 1);
+    ESP_LOGI("restore", "Auth is: %d", isAuthEmpty);
     if (isAuthEmpty == 0) {
         readKey(0xA4);
     }
@@ -672,13 +675,11 @@ uint16_t commandChaining(apdu_t apdu){
     uint16_t len = apdu.Lc;
 
     if (chain == 0) {
-        ESP_LOGE("chaining", "I failed here, 1");
         resetChaining();
     }
 
     if ((uint8_t) (apdu.CLA & (uint8_t) 0x10) == (uint8_t) 0x10) {
         // If chaining was already initiated, INS and P1P2 should match
-        ESP_LOGE("chaining", "I failed here, 2");
         if ((chain == 1) && (apdu.INS != chain_ins && apdu.P1P2 != chain_p1p2)) {
             resetChaining();
             return SW_CONDITIONS_NOT_SATISFIED;
@@ -686,7 +687,6 @@ uint16_t commandChaining(apdu_t apdu){
 
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
-            ESP_LOGE("chaining", "I failed here, 4");
             resetChaining();
             return SW_WRONG_DATA;
         }
@@ -704,11 +704,9 @@ uint16_t commandChaining(apdu_t apdu){
 
     if ((chain == 1) && (apdu.INS == chain_ins) && (apdu.P1P2 == chain_p1p2)) {
         chain = 0;
-        ESP_LOGE("chaining", "I failed here, 5");
 
         // Check whether data to be received is larger than size of the buffer
         if ((uint16_t) (in_received + len) > BUFFER_MAX_LENGTH) {
-            ESP_LOGE("chaining", "I failed here, 6");
             resetChaining();
             return SW_WRONG_DATA;
         }
@@ -717,18 +715,16 @@ uint16_t commandChaining(apdu_t apdu){
         uint8_t* bufOffset = buffer + in_received;
         memcpy(bufOffset, apdu.data, len);
         in_received += len;
-        return 0000;
+        return 0;
     } else if (chain == 1) {
         // Chained command expected
-        ESP_LOGE("chaining", "I failed here, 7");
         resetChaining();
         return SW_UNKNOWN;
     } else {
         // No chaining was used, so copy data to buffer
-        ESP_LOGE("chaining", "I failed here, 8");
         memcpy(buffer, apdu.data, len);
         in_received = len;
-        return 0000;
+        return 0;
     }
 }
 
@@ -750,7 +746,7 @@ uint16_t verify(uint8_t mode) {
         // Check given PW1 and set requested mode if verified succesfully
         if (pw1.remaining == 0) {
             return SW_AUTHENTICATION_BLOCKED;
-        } else if (checkPIN(&pw1, buffer, (uint8_t) in_received) != 0) {
+        } else if (checkPIN(&pw1, buffer, (uint8_t) in_received) == 0) {
             if (mode == (uint8_t) 0x81) {
                 pw1_modes[PW1_MODE_NO81] = 1;
             } else {
@@ -1055,7 +1051,7 @@ uint16_t internalAuthenticate(uint16_t* length) {
 uint16_t sendPublicKey(mbedtls_rsa_context* key) {
     // Build message in buffer
     uint16_t offset = 0;
-
+// TODO FIX
     buffer[offset++] = 0x7F;
     buffer[offset++] = 0x49;
     buffer[offset++] = (uint8_t) 0x82;
@@ -1088,7 +1084,7 @@ uint16_t sendPublicKey(mbedtls_rsa_context* key) {
 
     buffer[offsetForLength] = (uint8_t) ((offset - offsetForLength - 2) >> 8);
     buffer[offsetForLength+1] = (uint8_t) ((offset - offsetForLength - 2) & 0x00FF);
-
+    ESP_LOGE("sendPubKey", "offset: %d", offset);
     return offset;
 }
 
@@ -1894,9 +1890,10 @@ uint16_t importKey() {
         status = SW_UNKNOWN;
         goto cleanup;
     }
-    ESP_LOGI("importKey", "CHECK SUCCESS BEACH");   // TODO remove...
 
-
+    ESP_LOGI("importKey", "isSigEmpty %d", isSigEmpty);
+    ESP_LOGI("importKey", "isDecEmpty %d", isDecEmpty);
+    ESP_LOGI("importKey", "isAuthEmpty %d", isAuthEmpty);
     // Store the key to the flash memory
     if (type == (uint8_t) 0xB6) {
         isEmpty = &isSigEmpty;
@@ -1937,9 +1934,12 @@ uint16_t importKey() {
     }
     fclose(fpriv);
     (*isEmpty) = 0;
-    if (updatePINattr() != 0) {
+    if (updateKeyStatus() != 0) {
         return 1;
     }
+    ESP_LOGI("importKey", "isSigEmpty %d", isSigEmpty);
+    ESP_LOGI("importKey", "isDecEmpty %d", isDecEmpty);
+    ESP_LOGI("importKey", "isAuthEmpty %d", isAuthEmpty);
 
     status = SW_NO_ERROR;
 
@@ -1992,6 +1992,9 @@ uint16_t setPinRetries(uint8_t pin_retries, uint8_t reset_retries, uint8_t admin
  * @param output The struct that will hold the output
  */
 uint16_t sendNext(apdu_t apdu, uint16_t status, outData* output) {
+    ESP_LOGE("SEND NEXT", "out_sent %d", out_sent);
+    ESP_LOGE("SEND NEXT", "out_left %d", out_left);
+
     uint8_t* bufOffset;
 
     // Determine maximum size of the messages
@@ -2192,7 +2195,6 @@ void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
     uint16_t status = SW_NO_ERROR;
     uint16_t len = 0;
-    uint16_t ret;
 
     if (apdu.INS == 0xA4) {
         // Reset PW1 modes
@@ -2205,7 +2207,7 @@ void process(apdu_t apdu, outData* output) {
     }
 
     // Support for command chaining
-    if ((status = commandChaining(apdu)) != 0000){
+    if ((status = commandChaining(apdu)) != 0){
         goto exit;
     }
 
@@ -2224,6 +2226,7 @@ void process(apdu_t apdu, outData* output) {
         // GET RESPONSE
         case (uint8_t) 0xC0:
             // Will be handled at the exit
+            status = SW_NO_ERROR;
             break;
 
         // VERIFY
@@ -2255,7 +2258,7 @@ void process(apdu_t apdu, outData* output) {
             }
             // DECIPHER
             else if (apdu.P1P2 == (uint16_t) 0x8086) {
-                status = decipher(&apdu.Le);
+                status = decipher(&len);
             } else {
                 status = SW_WRONG_P1P2;
                 goto exit;
@@ -2269,8 +2272,8 @@ void process(apdu_t apdu, outData* output) {
 
         // GENERATE ASYMMETRIC KEY PAIR
         case (uint8_t) 0x47:
-            if ((status = genAsymKey(apdu.P1, &ret)) == SW_NO_ERROR) {
-                apdu.Le = ret;
+            if ((status = genAsymKey(apdu.P1, &len)) == SW_NO_ERROR) {
+                //apdu.Le = len;
             }
             break;
 
@@ -2342,12 +2345,15 @@ void process(apdu_t apdu, outData* output) {
             ESP_LOGE(TAG, "Failed to process APDU");
     }
 exit:
+    ESP_LOGE("process", "apdu INS %02X", apdu.INS);
+    ESP_LOGE("process", "status %04X", status);
     if (status != (uint16_t) 0x9000) {
         // Send the exception that was thrown
         sendError(apdu, status, output);
     } else {
         // GET RESPONSE
         if (apdu.INS == (uint8_t) 0xC0) {
+            ESP_LOGE("GET RESPONSE", "buffer[0] %d", buffer[0]);
             sendNext(apdu, SW_NO_ERROR, output);
         } else {
             sendBuffer(apdu, len, output);
