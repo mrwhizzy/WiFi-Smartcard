@@ -47,34 +47,14 @@ const char *base_path = "/spiflash";
 
 uint8_t toggle = 0;     // Toggle for Wi-Fi status LED
 uint8_t proceed = 0;    // When the proceed button is pressed, proceed is set
+uint8_t hardRst = 0;    // When the hard reset button is pressed, hardRst is set
 
 void proceedHandle(void* arg) {
     proceed = 1;
 }
 
-void initGPIO() {
-    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // Wi-Fi status LED
-    gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);      // Processing status LED
-
-    gpio_set_direction(GPIO_NUM_16, GPIO_MODE_INPUT);       // Proceed button
-    gpio_set_intr_type(GPIO_NUM_16, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
-    gpio_set_pull_mode(GPIO_NUM_16, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
-    gpio_install_isr_service(0);                            // Install GPIO interrupt service
-    gpio_isr_handler_add(GPIO_NUM_16, proceedHandle, (void*) GPIO_NUM_16);   // Hook ISR handler
-}
-
-void initNVS() {
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
-        // NVS partition was truncated and needs to be erased
-        const esp_partition_t* nvs_partition = esp_partition_find_first(
-                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
-        assert(nvs_partition && "partition table must have an NVS partition");
-        ESP_ERROR_CHECK(esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
-        // Retry nvs_flash_init
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
+void hardReset(void* arg) {
+    hardRst = 1;
 }
 
 uint8_t mountFS() {
@@ -97,6 +77,36 @@ void unmountFS() {
     ESP_LOGI(TAG, "Unmounting FAT filesystem");
     ESP_ERROR_CHECK(esp_vfs_fat_spiflash_unmount(base_path, s_wl_handle));
     ESP_LOGI(TAG, "Done");
+}
+
+void initGPIO() {
+    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // Wi-Fi status LED
+    gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);      // Processing status LED
+
+    gpio_set_direction(GPIO_NUM_16, GPIO_MODE_INPUT);       // Proceed button
+    gpio_set_intr_type(GPIO_NUM_16, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
+    gpio_set_pull_mode(GPIO_NUM_16, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
+    gpio_install_isr_service(0);                            // Install GPIO interrupt service
+    gpio_isr_handler_add(GPIO_NUM_16, proceedHandle, (void*) GPIO_NUM_16);  // Hook ISR handler
+
+    gpio_set_direction(GPIO_NUM_17, GPIO_MODE_INPUT);       // Re-initialize button
+    gpio_set_intr_type(GPIO_NUM_17, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
+    gpio_set_pull_mode(GPIO_NUM_17, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
+    gpio_isr_handler_add(GPIO_NUM_17, hardReset, (void*) GPIO_NUM_17);      // Hook ISR handler
+}
+
+void initNVS() {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        // NVS partition was truncated and needs to be erased
+        const esp_partition_t* nvs_partition = esp_partition_find_first(
+                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+        assert(nvs_partition && "partition table must have an NVS partition");
+        ESP_ERROR_CHECK(esp_partition_erase_range(nvs_partition, 0, nvs_partition->size));
+        // Retry nvs_flash_init
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
 }
 
 static esp_err_t event_handler(void *ctx, system_event_t *event) {
@@ -156,17 +166,18 @@ static void taskConnect(void *pvParameters) {
     struct sockaddr_in serv_addr;
 
     nvs_handle nvsHandle;       // Open NVS to check if the device has been initialized
+    uint8_t initialized = 0;    // Flag to check
+    gpio_set_level(GPIO_NUM_25, 1);     // Initialize/restore start
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &nvsHandle);
     if (err != ESP_OK) {
         goto exit;
     } else {
-        uint8_t initialized = 0;
         err = nvs_get_u8(nvsHandle, "initialized", &initialized);
         nvs_close(nvsHandle);
-        gpio_set_level(GPIO_NUM_25, 1);     // Initialize/restore start
         switch (err) {
-            case ESP_OK:    // If it has already been initialized, restore the data
+            case ESP_OK:        // If it has already been initialized, restore the data
                 if (restoreState() != 0) {
+                    hardRst = 1;
                     goto exit;
                 }
                 break;
@@ -181,12 +192,12 @@ static void taskConnect(void *pvParameters) {
         gpio_set_level(GPIO_NUM_25, 0);     // Initialize/restore end
     }
 
-    while(1) {
-        // Wait for the callback to set the CONNECTED_BIT in the event group.
-        xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
-        ESP_LOGI(TAG, "Connected to AP");
+    // Wait for the callback to set the CONNECTED_BIT in the event group.
+    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
+    ESP_LOGI(TAG, "Connected to AP");
 
-        printf("Press the proceed button to connect to: %s\n", IP[currNet]);
+    while(1) {
+        printf("\nPress the proceed button to connect to: %s\n", IP[currNet]);
         fflush(stdout);
         while (proceed == 0) {
             vTaskDelay(1000/portTICK_PERIOD_MS);
@@ -203,7 +214,7 @@ static void taskConnect(void *pvParameters) {
             vTaskDelay(1000/portTICK_PERIOD_MS);
             continue;
         }
-        ESP_LOGI(TAG, "... allocated socket\r\n");
+        ESP_LOGI(TAG, "... allocated socket");
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
             ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
@@ -211,12 +222,16 @@ static void taskConnect(void *pvParameters) {
             vTaskDelay(1000/portTICK_PERIOD_MS);
             goto exit;
         }
-        ESP_LOGI(TAG, "... connected");
+        ESP_LOGI(TAG, "... connected\n");
 
         while(1) {
             bzero(recvBuf, sizeof(recvBuf));                // Zero the receive buffer
             r = read(sockfd, recvBuf, sizeof(recvBuf)-1);   // Receive the APDU command
             comAPDU = parseAPDU(recvBuf, r);                // Parse the APDE command
+
+            if (comAPDU.INS == 0x00) {          // Nothing more to receive
+                break;
+            }
 
 #ifdef PRINTAPDU
             printf("CLA: %02X\tINS: %02X\tP1: %02X\t", comAPDU.CLA, comAPDU.INS, comAPDU.P1);
@@ -247,7 +262,7 @@ static void taskConnect(void *pvParameters) {
                 vTaskDelay(1000/portTICK_PERIOD_MS);
                 goto exit;
             }
-            ESP_LOGI(TAG, "... socket send success");
+            ESP_LOGI(TAG, "... socket send success\n");
         }
     }
 
@@ -261,6 +276,21 @@ exit:
         esp_restart();
 }
 
+static void checkReset(void *pvParameters) {
+    while(1) {
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+        if (hardRst == 1) {          // Erase "initialized" from NVS and restart
+            nvs_handle nvsHandle;
+            if (nvs_open("storage", NVS_READWRITE, &nvsHandle) == ESP_OK) {
+                if (nvs_erase_key(nvsHandle, "initialized") == ESP_OK) {
+                    unmountFS();
+                    esp_restart();
+                }
+            }
+        }
+    }
+}
+
 void app_main() {
     initGPIO();
     initNVS();
@@ -269,4 +299,5 @@ void app_main() {
     }
     initWiFi();
     xTaskCreate(&taskConnect, "taskConnect", 8192, NULL, 5, NULL);
+    xTaskCreate(&checkReset, "checkReset", 2048, NULL, 5, NULL);
 }
