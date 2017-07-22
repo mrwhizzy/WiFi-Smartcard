@@ -278,7 +278,7 @@ exit:
 
 static void checkReset(void *pvParameters) {
     while(1) {
-        vTaskDelay(1000/portTICK_PERIOD_MS);
+        vTaskDelay(4000/portTICK_PERIOD_MS);
         if (hardRst == 1) {          // Erase "initialized" from NVS and restart
             nvs_handle nvsHandle;
             if (nvs_open("storage", NVS_READWRITE, &nvsHandle) == ESP_OK) {

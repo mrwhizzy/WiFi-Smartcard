@@ -365,6 +365,18 @@ uint8_t readKey(uint8_t type) {
         goto exitRK;
     }
 
+    // for testing purposes
+    rewind(f);
+    char line[2048];
+    size_t newLen = fread(line, sizeof(char), 2048, f);
+    if (newLen != 0) {
+        line[++newLen] = '\0';
+    }
+    fclose(f);
+    ESP_LOGI(TAG, "Read from key file:\n%s\n", line);
+    // testing purposes end here
+
+
 exitRK:
     return ret;
 }
@@ -1813,27 +1825,27 @@ uint16_t importKey() {
         return SW_DATA_INVALID;
     }
     len = getLength(buffer, offset_data, &status);
+    offset_data += getLengthBytes(len);
 
     mbedtls_mpi P1, Q1, H;
     mbedtls_mpi_init(&P1);
     mbedtls_mpi_init(&Q1);
     mbedtls_mpi_init(&H);
 
-    offset_data += getLengthBytes(len);
     bufOffset = buffer + offset_data;
     if((mbedtls_mpi_read_binary(&key->E, bufOffset, len_e) != 0)) {
         status = SW_UNKNOWN;
         goto cleanup;
     }
-
     offset_data += len_e;
+
     bufOffset = buffer + offset_data;
     if((mbedtls_mpi_read_binary(&key->P, bufOffset, len_p) != 0)) {
         status = SW_UNKNOWN;
         goto cleanup;
     }
-
     offset_data += len_p;
+
     bufOffset = buffer + offset_data;
     if((mbedtls_mpi_read_binary(&key->Q, bufOffset, len_q) != 0)) {
         status = SW_UNKNOWN;
