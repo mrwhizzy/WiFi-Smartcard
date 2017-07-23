@@ -495,7 +495,8 @@ uint8_t checkPIN(ownerPIN* pw, uint8_t* pin, uint8_t length) {
 
     if (memcmp(pin, &pw->value[1], length) == 0) {
         pw->validated = 1;
-        pw->remaining = (uint8_t) (pw->remaining + 1); // Restore
+        //pw->remaining = (uint8_t) (pw->remaining + 1); // Shouldn't it go back to pw->limit?
+        pw->remaining = (uint8_t) (pw->limit); // Restore (like so?)
         if (updatePINattr() != 0) {
             return 1;
         }
