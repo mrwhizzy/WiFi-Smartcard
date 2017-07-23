@@ -45,7 +45,7 @@ static wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
 // Mount path for the partition
 const char *base_path = "/spiflash";
 
-uint8_t toggle = 0;     // Toggle for Wi-Fi status LED
+uint8_t connected = 0;
 uint8_t proceed = 0;    // When the proceed button is pressed, proceed is set
 uint8_t hardRst = 0;    // When the hard reset button is pressed, hardRst is set
 
@@ -114,7 +114,6 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
 
     switch(event->event_id) {
     case SYSTEM_EVENT_STA_START:
-        gpio_set_level(GPIO_NUM_26, toggle);    // Not connected to a network
         currNet = nextNet;
         ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[currNet]).sta.ssid);
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[currNet]));
@@ -122,13 +121,14 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
         ESP_ERROR_CHECK(esp_wifi_connect());
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
+        connected = 1;
         gpio_set_level(GPIO_NUM_26, 1);         // Connected to a network
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
+        connected = 0;
+        gpio_set_level(GPIO_NUM_26, 0);         // Disconnected
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-        toggle ^= 1;
-        gpio_set_level(GPIO_NUM_26, toggle);    // Not connected to a network
         currNet = nextNet;
         ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[nextNet]).sta.ssid);
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
@@ -278,7 +278,6 @@ exit:
 
 static void checkReset(void *pvParameters) {
     while(1) {
-        vTaskDelay(4000/portTICK_PERIOD_MS);
         if (hardRst == 1) {          // Erase "initialized" from NVS and restart
             nvs_handle nvsHandle;
             if (nvs_open("storage", NVS_READWRITE, &nvsHandle) == ESP_OK) {
@@ -288,6 +287,18 @@ static void checkReset(void *pvParameters) {
                 }
             }
         }
+        vTaskDelay(4000/portTICK_PERIOD_MS);
+    }
+}
+
+static void wifiStatus(void *pvParameters) {
+    uint8_t toggle = 0;     // Toggle for Wi-Fi status LED
+    while(1) {
+        if (connected == 0) {
+            toggle ^= 1;
+            gpio_set_level(GPIO_NUM_26, toggle);
+        }
+        vTaskDelay(500/portTICK_PERIOD_MS);
     }
 }
 
@@ -300,4 +311,5 @@ void app_main() {
     initWiFi();
     xTaskCreate(&taskConnect, "taskConnect", 8192, NULL, 5, NULL);
     xTaskCreate(&checkReset, "checkReset", 2048, NULL, 5, NULL);
+    xTaskCreate(&wifiStatus, "wifiStatus", 512, NULL, 5, NULL);
 }

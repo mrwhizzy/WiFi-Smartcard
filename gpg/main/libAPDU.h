@@ -365,18 +365,6 @@ uint8_t readKey(uint8_t type) {
         goto exitRK;
     }
 
-    // for testing purposes
-    rewind(f);
-    char line[2048];
-    size_t newLen = fread(line, sizeof(char), 2048, f);
-    if (newLen != 0) {
-        line[++newLen] = '\0';
-    }
-    fclose(f);
-    ESP_LOGI(TAG, "Read from key file:\n%s\n", line);
-    // testing purposes end here
-
-
 exitRK:
     return ret;
 }
