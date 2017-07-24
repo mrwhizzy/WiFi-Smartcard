@@ -25,7 +25,7 @@ src/esp_image_format.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/stdio.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/assert.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_assert.h \
@@ -82,7 +82,7 @@ src/esp_image_format.o: \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

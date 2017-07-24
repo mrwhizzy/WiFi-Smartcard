@@ -22,7 +22,7 @@ hw_random.o: /Users/CMelas/esp/esp-idf/components/esp32/./hw_random.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_assert.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/assert.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/hal.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core.h \
@@ -86,7 +86,7 @@ hw_random.o: /Users/CMelas/esp/esp-idf/components/esp32/./hw_random.c \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

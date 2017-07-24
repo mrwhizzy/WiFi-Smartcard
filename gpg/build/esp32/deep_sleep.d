@@ -48,7 +48,7 @@ deep_sleep.o: /Users/CMelas/esp/esp-idf/components/esp32/./deep_sleep.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/xtensa-versions.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core-matmap.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_clk.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/cache.h \
@@ -184,7 +184,7 @@ deep_sleep.o: /Users/CMelas/esp/esp-idf/components/esp32/./deep_sleep.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

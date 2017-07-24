@@ -53,7 +53,7 @@ crosscore_int.o: \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/rtc_cntl_reg.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/stdlib.h \
@@ -183,7 +183,7 @@ crosscore_int.o: \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

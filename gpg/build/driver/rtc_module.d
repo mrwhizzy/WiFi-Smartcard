@@ -24,7 +24,7 @@ rtc_module.o: /Users/CMelas/esp/esp-idf/components/driver/./rtc_module.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_assert.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/assert.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/rtc_io_reg.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/sens_reg.h \
@@ -125,7 +125,7 @@ rtc_module.o: /Users/CMelas/esp/esp-idf/components/driver/./rtc_module.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/rtc_io_reg.h:
 

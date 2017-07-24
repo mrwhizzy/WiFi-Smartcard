@@ -2,7 +2,7 @@ src/ff.o: /Users/CMelas/esp/esp-idf/components/fatfs/src/ff.c \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/ff.h \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/integer.h \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/reent.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/_ansi.h \
@@ -78,7 +78,7 @@ src/ff.o: /Users/CMelas/esp/esp-idf/components/fatfs/src/ff.c \
 
 /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h:
 

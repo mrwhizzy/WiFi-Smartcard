@@ -53,7 +53,7 @@ system_api.o: /Users/CMelas/esp/esp-idf/components/esp32/./system_api.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_wifi.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/stdlib.h \
@@ -229,7 +229,7 @@ system_api.o: /Users/CMelas/esp/esp-idf/components/esp32/./system_api.c \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

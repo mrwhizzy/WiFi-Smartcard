@@ -22,7 +22,7 @@ esp32/brownout.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/alloca.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_assert.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/assert.h \
@@ -73,7 +73,7 @@ esp32/brownout.o: \
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/alloca.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h:
 

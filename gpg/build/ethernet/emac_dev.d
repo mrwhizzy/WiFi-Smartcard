@@ -37,7 +37,7 @@ emac_dev.o: /Users/CMelas/esp/esp-idf/components/ethernet/./emac_dev.c \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/emac_reg_v2.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/emac_ex_reg.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/driver/include/driver/gpio.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_types.h \
@@ -124,7 +124,7 @@ emac_dev.o: /Users/CMelas/esp/esp-idf/components/ethernet/./emac_dev.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/driver/include/driver/gpio.h:
 

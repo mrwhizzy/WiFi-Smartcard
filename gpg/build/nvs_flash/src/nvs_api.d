@@ -12,7 +12,7 @@ src/nvs_api.o: \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/src/compressed_enum_table.hpp \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/src/nvs_page.hpp \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/src/intrusive_list.h \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/src/nvs_item_hash_list.hpp \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/src/nvs_pagemanager.hpp \
@@ -75,7 +75,7 @@ src/nvs_api.o: \
 
 /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/nvs_flash/src/intrusive_list.h:
 

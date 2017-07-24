@@ -41,7 +41,7 @@ syscall_table.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/dirent.h \
  /Users/CMelas/esp/esp-idf/components/vfs/include/sys/dirent.h \
  /Users/CMelas/esp/esp-idf/components/newlib/platform_include/esp_newlib.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/string.h:
 
@@ -125,4 +125,4 @@ syscall_table.o: \
 
 /Users/CMelas/esp/esp-idf/components/newlib/platform_include/esp_newlib.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:

@@ -37,7 +37,7 @@ eth_phy/phy_common.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_attr.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_intr_alloc.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h
 
@@ -115,7 +115,7 @@ eth_phy/phy_common.o: \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

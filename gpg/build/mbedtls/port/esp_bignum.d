@@ -29,7 +29,7 @@ port/esp_bignum.o: \
  /Users/CMelas/esp/esp-idf/components/mbedtls/port/include/mbedtls/bignum.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/bignum.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/port/include/mbedtls/esp_config.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/check_config.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h \
@@ -146,7 +146,7 @@ port/esp_bignum.o: \
 
 /Users/CMelas/esp/esp-idf/components/mbedtls/port/include/mbedtls/esp_config.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/mbedtls/include/mbedtls/check_config.h:
 

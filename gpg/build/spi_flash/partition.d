@@ -28,7 +28,7 @@ partition.o: /Users/CMelas/esp/esp-idf/components/spi_flash/./partition.c \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include/esp_flash_encrypt.h \
@@ -98,7 +98,7 @@ partition.o: /Users/CMelas/esp/esp-idf/components/spi_flash/./partition.c \
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_partition.h:
 

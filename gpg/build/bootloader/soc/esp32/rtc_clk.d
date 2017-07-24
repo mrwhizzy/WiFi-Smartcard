@@ -23,7 +23,7 @@ esp32/rtc_clk.o: /Users/CMelas/esp/esp-idf/components/soc/esp32/rtc_clk.c \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/i2c_bbpll.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/soc_log.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h
+ /Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 
@@ -73,4 +73,4 @@ esp32/rtc_clk.o: /Users/CMelas/esp/esp-idf/components/soc/esp32/rtc_clk.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h:

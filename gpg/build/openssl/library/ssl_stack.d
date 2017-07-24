@@ -8,7 +8,7 @@ library/ssl_stack.o: \
  /Users/CMelas/esp/esp-idf/components/openssl/include/internal/x509_vfy.h \
  /Users/CMelas/esp/esp-idf/components/openssl/include/internal/ssl_dbg.h \
  /Users/CMelas/esp/esp-idf/components/openssl/include/platform/ssl_opt.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/openssl/include/platform/ssl_port.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_types.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/cdefs.h \
@@ -53,7 +53,7 @@ library/ssl_stack.o: \
 
 /Users/CMelas/esp/esp-idf/components/openssl/include/platform/ssl_opt.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/openssl/include/platform/ssl_port.h:
 

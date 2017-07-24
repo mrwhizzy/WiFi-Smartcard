@@ -5,7 +5,7 @@ SPI_Flash.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/_default_types.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/features.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_assert.h \
@@ -40,7 +40,7 @@ SPI_Flash.o: \
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

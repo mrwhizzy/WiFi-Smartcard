@@ -25,7 +25,7 @@ trax.o: /Users/CMelas/esp/esp-idf/components/xtensa-debug-module/./trax.c \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/dport_access.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_attr.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_dport_access.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h \
  /Users/CMelas/esp/esp-idf/components/xtensa-debug-module/include/eri.h \
  /Users/CMelas/esp/esp-idf/components/xtensa-debug-module/include/xtensa-debug-module.h \
@@ -88,7 +88,7 @@ trax.o: /Users/CMelas/esp/esp-idf/components/xtensa-debug-module/./trax.c \
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/esp_dport_access.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h:
 

@@ -51,7 +51,7 @@ dport_access.o: \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/spi_reg.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdlib.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/stdlib.h \
@@ -178,7 +178,7 @@ dport_access.o: \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

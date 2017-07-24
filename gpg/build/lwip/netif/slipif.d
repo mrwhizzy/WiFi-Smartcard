@@ -27,7 +27,7 @@ netif/slipif.o: /Users/CMelas/esp/esp-idf/components/lwip/netif/slipif.c \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_default_fcntl.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/stat.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_task.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/lwip/include/lwip/lwip/debug.h \
  /Users/CMelas/esp/esp-idf/components/lwip/include/lwip/lwip/arch.h \
  /Users/CMelas/esp/esp-idf/components/lwip/include/lwip/port/arch/cc.h \
@@ -140,7 +140,7 @@ netif/slipif.o: /Users/CMelas/esp/esp-idf/components/lwip/netif/slipif.c \
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/esp_task.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/lwip/include/lwip/lwip/debug.h:
 

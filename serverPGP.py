@@ -11,16 +11,16 @@ SYNOPSIS
     serverPGP.py
 
 DESCRIPTION
- 
+
     This is a Python implementation of a server that
     the ESP32 can connect to and exchange APDUs.
- 
+
     * Supports PIN verification
     * Supports importing RSA-2048 keys from file
     * Supports asymmetric key generation on the ESP32
     * Supports putData fully
-    * Supports getData (partially for now)
- 
+    * Supports getData fully
+
 """
 import sys
 import time
@@ -39,7 +39,15 @@ def checkResp(resp):
         return "00 "
 
 
-def sendAndGetResponses(self, command, buf):
+def getMore(self, more):
+    bytes = bytearray.fromhex("00 C0 00 00 " + more)
+    self.request.sendall(bytes)
+
+    self.data = self.request.recv(257).strip()
+    return ''.join(["%02X "%ord(x) for x in self.data]).strip()
+
+
+def sendAndGetResponse(self, command):
     bytes = bytearray.fromhex(command)
     self.request.sendall(bytes)
 
@@ -49,14 +57,9 @@ def sendAndGetResponses(self, command, buf):
     while True:
         more = checkResp(resp)
         if (more == "00 "):
-            return buf+resp
-        else:
-            tmpBuf = buf + resp[:len(resp)-6] + " "
-            resp = sendAndGetResponses(self, "00 C0 00 00 "+more, tmpBuf)
+            return resp
 
-
-def sendAndGetResponse(self, command):
-    return sendAndGetResponses(self, command, "")
+        resp = resp[:len(resp)-6] + " " + getMore(self, more)
 
 
 def getPWBytes(self):
@@ -189,34 +192,124 @@ def getData(self):
         if (select == 0):
             break
         elif (select == 1):
-            resp = sendAndGetResponse(self, "00 CA 00 4F 00") + "\n"    # GET DATA - AID
+            resp = sendAndGetResponse(self, "00 CA 00 4F 00") + " "    # GET DATA - AID
             print "AID: " + resp[:len(resp)-6] + "\n"
         elif (select == 2):
-            resp = sendAndGetResponse(self, "00 CA 00 5E 00") + "\n"    # GET DATA - Login Data
+            resp = sendAndGetResponse(self, "00 CA 00 5E 00") + " "    # GET DATA - Login Data
             print "Login Data: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
         elif (select == 3):
-            resp = sendAndGetResponse(self, "00 CA 5F 50 00") + "\n"    # GET DATA - URL
+            resp = sendAndGetResponse(self, "00 CA 5F 50 00") + " "    # GET DATA - URL
             print "URL: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
         elif (select == 4):
-            resp = sendAndGetResponse(self, "00 CA 5F 52 00") + "\n"    # GET DATA - Historical Bytes
-            print resp[:len(resp)-6] + "\n"
+            resp = sendAndGetResponse(self, "00 CA 5F 52 00") + " "    # GET DATA - Historical Bytes
+            print "Historical Bytes: " + resp[:len(resp)-6] + "\n"
         elif (select == 5):
-            resp = sendAndGetResponse(self, "00 CA 00 65 00") + "\n"    # GET DATA - Cardholder Related Data
+            resp = sendAndGetResponse(self, "00 CA 00 65 00") + " "    # GET DATA - Cardholder Related Data
             nLen = int(resp[3]+resp[4], 16)
-            name = bytearray.fromhex(resp[2*3:(2+nLen)*3]).decode()
-            print "Cardholder Info:\n\tName: " + name + "\n"
-            # TODO: parse more
+            offset = 2
+            name = bytearray.fromhex(resp[offset*3:(offset+nLen)*3]).decode()
+            print "Cardholder Related Data:\n\tName:\t\t" + name
+            offset = offset + nLen + 2
+
+            lLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            lang = bytearray.fromhex(resp[offset*3:(offset+lLen)*3]).decode()
+            print "\tLanguage:\t" + lang
+            offset = offset + lLen + 3
+
+            if (resp[(offset*3)+1] == "1"):
+                print "\tSex:\t\tMale\n"
+            elif (resp[(offset*3)+1] == "2"):
+                print "\tSex:\t\tFemale\n"
+            else:
+                print "\tSex:\t\tNot set\n"
         elif (select == 6):
-            resp = sendAndGetResponse(self, "00 CA 00 6E 00") + "\n"    # GET DATA - Application Related Data
-            # TODO: parse
+            resp = sendAndGetResponse(self, "00 CA 00 6E 00") + " "    # GET DATA - Application Related Data
+            tmpLen = int(resp[3]+resp[4], 16)
+            offset = 2
+            print "Application Related Data:\n\tAID:\t\t\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 2
+
+            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            print "\tHistorical Bytes:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 4
+
+            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            print "\tExtended Capabilities:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 1
+
+            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            print "\tAlgorithm Attributes\n\t\tSignature:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 1
+
+            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            print "\t\tDecryption:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 1
+
+            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+            offset = offset + 1
+            print "\t\tAuthentication:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + tmpLen + 2
+
+            print "\tPW1 status bytes\n\t\tPW1 status:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tPW1 max length:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tRC max length:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tPW3 max length:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tPW1 remaining:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tRC remaining:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 1
+            print "\t\tPW3 remaining:\t" + resp[offset*3] + resp[offset*3+1]
+            offset = offset + 3
+
+            tmpLen = 20
+            print "\tKey Fingerprints\n\t\tSignature:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 20
+            print "\t\tDecryption:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 20
+            print "\t\tAuthentication:\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 22
+
+            tmpLen = 20
+            print "\tCA Fingerprints\n\t\tCA 1:\t\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 20
+            print "\t\tCA 2:\t\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 20
+            print "\t\tCA 3:\t\t" + resp[offset*3:(offset+tmpLen)*3]
+            offset = offset + 22
+
+            tmpLen = 4
+            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+            print "\tKey Generation Times\n\t\tSignature:\t" + t
+            offset = offset + 4
+            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+            print "\t\tDecryption:\t" + t
+            offset = offset + 4
+            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+            print "\t\tAuthentication:\t" + t + "\n"
         elif (select == 7):
-            resp = sendAndGetResponse(self, "00 CA 00 7A 00") + "\n"    # GET DATA - Security Support Template
-            # TODO: parse?
+            resp = sendAndGetResponse(self, "00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
+            dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
+            print "Digital Signature Counter: {}\n".format(dsCnt)
         elif (select == 8):
-            resp = sendAndGetResponse(self, "00 CA 7F 21 00") + "\n"    # GET DATA - Cardholder Certificate
-            print resp[:len(resp)-6]
+            resp = sendAndGetResponse(self, "00 CA 7F 21 00") + " "    # GET DATA - Cardholder Certificate
+            print "Cardholder certificate (hex):\n" + resp[:len(resp)-6] + "\n"
         elif (select == 9):
-            getPWBytes(self)                                            # GET DATA - PW Status Bytes
+            getPWBytes(self)                                           # GET DATA - PW Status Bytes
         else:
             print "Invalid option\n"
         select = -1
@@ -257,7 +350,7 @@ def genAsymKey(self):
     keyType = 0
     while True:
         print "\nPlease enter the type of the key:"
-        print "\t(1) Sig\n\t(2) Dec\n\t(3) Auth"
+        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
         try:
             keyType = int(raw_input("Your selection: "))
         except ValueError:
@@ -268,6 +361,8 @@ def genAsymKey(self):
 
     keyTag = getKeyTag(keyType)
     resp = sendAndGetResponse(self, "00 47 80 00 02 " + keyTag + "00 00")
+
+    print resp
 
     pub = bytearray.fromhex(resp[9*3:265*3] + resp[267*3:270*3])
     if (not (putFP(self, pub, keyType))):
@@ -301,7 +396,7 @@ def importKey(self):
     keyType = 0
     while True:
         print "Please enter the type of the key:"
-        print "\t(1) Sig\n\t(2) Dec\n\t(3) Auth"
+        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
         try:
             keyType = int(raw_input("Your selection: "))
         except ValueError:
@@ -482,7 +577,7 @@ def putData(self):
                 print "Key import failed\n"
         else:
             print "Invalid option\n"
-        select = -1 
+        select = -1
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -548,7 +643,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 pass#
             else:
                 print "Invalid option"
-            select = -1 
+            select = -1
 
 
 if __name__ == '__main__':

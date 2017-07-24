@@ -415,7 +415,7 @@ uint8_t restoreState() {
     if (isAuthEmpty == 0) {
         readKey(0xA4);
     }
-    ERRORCHK(storeBuf("/spiflash/authAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
+    ERRORCHK(storeBuf("/spiflash/autAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
     ERRORCHK(storeBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
     ERRORCHK(storeBuf("/spiflash/authTime.dat", authTime, sizeof(authTime)), return 1);
 
@@ -2105,7 +2105,7 @@ uint8_t initialize() {
     authAttributes[2] = (uint8_t) (KEY_SIZE & 0x00FF);
     authAttributes[3] = (uint8_t) (EXPONENT_SIZE >> 8);
     authAttributes[4] = (uint8_t) (EXPONENT_SIZE & 0x00FF);
-    ERRORCHK(storeBuf("/spiflash/authAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
+    ERRORCHK(storeBuf("/spiflash/autAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
     bzero(authFP, sizeof(authFP));
     ERRORCHK(storeBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
     bzero(authTime, sizeof(authTime));
@@ -2253,9 +2253,7 @@ void process(apdu_t apdu, outData* output) {
 
         // GENERATE ASYMMETRIC KEY PAIR
         case (uint8_t) 0x47:
-            if ((status = genAsymKey(apdu.P1, &len)) == SW_NO_ERROR) {
-                //apdu.Le = len;
-            }
+            status = genAsymKey(apdu.P1, &len);
             break;
 
         // GET CHALLENGE

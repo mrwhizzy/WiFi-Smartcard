@@ -29,7 +29,7 @@ spi_master.o: /Users/CMelas/esp/esp-idf/components/driver/./spi_master.c \
  /Users/CMelas/esp/esp-idf/components/driver/include/driver/spi_master.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/hal.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core.h \
@@ -145,7 +145,7 @@ spi_master.o: /Users/CMelas/esp/esp-idf/components/driver/./spi_master.c \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

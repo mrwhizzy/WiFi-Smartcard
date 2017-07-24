@@ -62,7 +62,7 @@ phy_init.o: /Users/CMelas/esp/esp-idf/components/esp32/./phy_init.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/xtensa-versions.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core-matmap.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs.h \
  /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs_flash.h \
  /Users/CMelas/esp/esp-idf/components/esp32/./phy.h \
@@ -195,7 +195,7 @@ phy_init.o: /Users/CMelas/esp/esp-idf/components/esp32/./phy_init.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/nvs_flash/include/nvs.h:
 

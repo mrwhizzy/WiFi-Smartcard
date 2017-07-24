@@ -1,6 +1,6 @@
 src/secure_boot_signatures.o: \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/src/secure_boot_signatures.c \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_flash.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/_default_types.h \
@@ -37,7 +37,7 @@ src/secure_boot_signatures.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/sha.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_types.h
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_flash.h:
 

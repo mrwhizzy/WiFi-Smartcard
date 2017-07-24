@@ -23,7 +23,7 @@ task_wdt.o: /Users/CMelas/esp/esp-idf/components/esp32/./task_wdt.c \
  /Users/CMelas/esp/esp-idf/components/newlib/include/alloca.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/string.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/string.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
@@ -120,7 +120,7 @@ task_wdt.o: /Users/CMelas/esp/esp-idf/components/esp32/./task_wdt.c \
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/sys/string.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h:
 

@@ -25,7 +25,7 @@ src/bootloader_random.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_dport_access.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/i2s_reg.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_system.h \
@@ -113,7 +113,7 @@ src/bootloader_random.o: \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

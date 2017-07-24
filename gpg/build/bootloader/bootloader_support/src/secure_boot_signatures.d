@@ -1,6 +1,6 @@
 src/secure_boot_signatures.o: \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/src/secure_boot_signatures.c \
- /Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_flash.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
@@ -15,7 +15,7 @@ src/secure_boot_signatures.o: \
  /Users/CMelas/esp/esp-idf/components/micro-ecc/micro-ecc/uECC.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/sha.h
 
-/Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_flash.h:
 

@@ -38,7 +38,7 @@ i2c.o: /Users/CMelas/esp/esp-idf/components/driver/./i2c.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/xtensa-versions.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core-matmap.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/malloc.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/malloc.h \
@@ -162,7 +162,7 @@ i2c.o: /Users/CMelas/esp/esp-idf/components/driver/./i2c.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/rom/ets_sys.h:
 

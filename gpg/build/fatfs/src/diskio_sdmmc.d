@@ -40,7 +40,7 @@ src/diskio_sdmmc.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_attr.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_intr_alloc.h \
  /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
@@ -154,7 +154,7 @@ src/diskio_sdmmc.o: \
 
 /Users/CMelas/esp/esp-idf/components/fatfs/src/ffconf.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOS.h:
 

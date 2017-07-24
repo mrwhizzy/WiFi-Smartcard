@@ -17,7 +17,7 @@ esp32/cpu_util.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core-isa.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/rtc_cntl_reg.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h
 
 /Users/CMelas/esp/esp-idf/components/esp32/include/esp_attr.h:
 
@@ -53,4 +53,4 @@ esp32/cpu_util.o: \
 
 /Users/CMelas/esp/esp-idf/components/soc/esp32/include/soc/soc.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:

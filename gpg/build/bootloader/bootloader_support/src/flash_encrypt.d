@@ -3,7 +3,7 @@ src/flash_encrypt.o: \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_flash.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_err.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
- /Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_random.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include/esp_image_format.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include/esp_flash_encrypt.h \
@@ -31,7 +31,7 @@ src/flash_encrypt.o: \
 
 /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
 
-/Users/CMelas/esp/gpg/build/bootloader/../include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/bootloader/../include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_random.h:
 

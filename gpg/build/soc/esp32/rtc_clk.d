@@ -34,7 +34,7 @@ esp32/rtc_clk.o: /Users/CMelas/esp/esp-idf/components/soc/esp32/rtc_clk.c \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/i2c_bbpll.h \
  /Users/CMelas/esp/esp-idf/components/soc/esp32/soc_log.h \
  /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h:
 
@@ -106,4 +106,4 @@ esp32/rtc_clk.o: /Users/CMelas/esp/esp-idf/components/soc/esp32/rtc_clk.c \
 
 /Users/CMelas/esp/esp-idf/components/log/include/esp_log.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:

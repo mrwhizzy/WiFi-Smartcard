@@ -1,5 +1,5 @@
 int_wdt.o: /Users/CMelas/esp/esp-idf/components/esp32/./int_wdt.c \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/machine/_default_types.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/features.h \
@@ -66,7 +66,7 @@ int_wdt.o: /Users/CMelas/esp/esp-idf/components/esp32/./int_wdt.c \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_intr_alloc.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/esp_int_wdt.h
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h:
 

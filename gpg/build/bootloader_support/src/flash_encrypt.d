@@ -24,7 +24,7 @@ src/flash_encrypt.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/stdio.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/assert.h \
  /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_random.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include/esp_image_format.h \
  /Users/CMelas/esp/esp-idf/components/bootloader_support/include/esp_flash_encrypt.h \
@@ -94,7 +94,7 @@ src/flash_encrypt.o: \
 
 /Users/CMelas/esp/esp-idf/components/spi_flash/include/esp_spi_flash.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/bootloader_support/include_priv/bootloader_random.h:
 

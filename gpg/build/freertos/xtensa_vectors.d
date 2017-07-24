@@ -14,7 +14,7 @@ xtensa_vectors.o: \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/system.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/simcall.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_context.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/xtruntime-frames.h \
@@ -53,7 +53,7 @@ xtensa_vectors.o: \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 

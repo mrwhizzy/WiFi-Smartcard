@@ -20,7 +20,7 @@ event_groups.o: \
  /Users/CMelas/esp/esp-idf/components/newlib/include/stdint.h \
  /Users/CMelas/esp/esp-idf/components/newlib/include/sys/_intsup.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h \
- /Users/CMelas/esp/gpg/build/include/sdkconfig.h \
+ /Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h \
  /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/hal.h \
  /Users/CMelas/esp/esp-idf/components/esp32/include/xtensa/config/core.h \
@@ -94,7 +94,7 @@ event_groups.o: \
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/FreeRTOSConfig.h:
 
-/Users/CMelas/esp/gpg/build/include/sdkconfig.h:
+/Users/CMelas/esp/cxm661/gpg/build/include/sdkconfig.h:
 
 /Users/CMelas/esp/esp-idf/components/freertos/include/freertos/xtensa_config.h:
 
