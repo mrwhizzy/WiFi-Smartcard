@@ -415,9 +415,9 @@ uint8_t restoreState() {
     if (isAuthEmpty == 0) {
         readKey(0xA4);
     }
-    ERRORCHK(storeBuf("/spiflash/autAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
-    ERRORCHK(storeBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
-    ERRORCHK(storeBuf("/spiflash/authTime.dat", authTime, sizeof(authTime)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/autAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
+    ERRORCHK(restoreBuf("/spiflash/authTime.dat", authTime, sizeof(authTime)), return 1);
 
     ERRORCHK(restoreVar("loginData_len", 0, &loginData_length, 16), return 1);
     ERRORCHK(restoreBuf("/spiflash/logData.dat", loginData, loginData_length), return 1);
@@ -1101,6 +1101,7 @@ uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
         }
 
         if (keyGen(buffer[0]) != 0) {
+            ESP_LOGE("FU", "THIS");
             return SW_UNKNOWN;
         }
 
@@ -1114,6 +1115,7 @@ uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
     mbedtls_rsa_context* key = getKey(buffer[0], &err);
     if (err != 0) {
         (*ret) = 0;
+        ESP_LOGE("FU", "THAT");
         return SW_UNKNOWN;
     }
     

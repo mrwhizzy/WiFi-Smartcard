@@ -20,6 +20,7 @@ DESCRIPTION
     * Supports asymmetric key generation on the ESP32
     * Supports putData fully
     * Supports getData fully
+    * Supports resetRetryCounter
 
 """
 import sys
@@ -60,33 +61,6 @@ def sendAndGetResponse(self, command):
             return resp
 
         resp = resp[:len(resp)-6] + " " + getMore(self, more)
-
-
-def getPWBytes(self):
-    resp = sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
-    print 'PW1 tries remaining: ' + resp[13] + resp[14]
-    print ' RC tries remaining: ' + resp[16] + resp[17]
-    print 'PW3 tries remaining: ' + resp[19] + resp[20] + "\n"
-
-
-def verify(self, p2):
-    while True:
-        pw1 = getpass("Please enter the password: ")
-        pw2 = getpass("Please confirm the password: ")
-        if (pw1 == pw2):
-            break
-        else:
-            print "The passwords do not match\n"
-
-    pw = " ".join("{:02x}".format(ord(c)) for c in pw1) + " "
-    command = "00 20 00 " + p2 + '{0:02X}'.format(int(len(pw)/3)) + " " + pw
-    if (sendAndGetResponse(self, command) == "90 00"):
-        print "\nSuccessfully verified"
-        return True
-    else:
-        print "\nVerification failed"
-        getPWBytes(self)
-        return False
 
 
 def getLen(argStr):
@@ -133,6 +107,43 @@ def getTimeTag(key):
         return "00 "
 
 
+def promptForPass(mesg):
+    while True:
+        pw1 = getpass(mesg)
+        pw2 = getpass("Please confirm the password: ")
+        if (pw1 == pw2):
+            return pw1
+        else:
+            print "The passwords do not match\n"
+
+
+def promptForKeyType():
+    keyType = 0
+    while True:
+        print "\nPlease enter the type of the key:"
+        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
+        try:
+            keyType = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (0 < keyType < 4):
+            return keyType
+
+
+def verify(self, p2):
+    pw1 = promptForPass("Please enter the password: ")
+    pw = " ".join("{:02x}".format(ord(c)) for c in pw1) + " "
+    command = "00 20 00 " + p2 + '{0:02X}'.format(int(len(pw)/3)) + " " + pw
+    if (sendAndGetResponse(self, command) == "90 00"):
+        print "\nSuccessfully verified"
+        return True
+    else:
+        print "\nVerification failed"
+        getPWBytes(self)
+        return False
+
+
 def verifySelect(self):
     print "\n\t(1) VERIFY"
 
@@ -168,21 +179,141 @@ def verifySelect(self):
             select = -1
 
 
+def getARD(self):
+    resp = sendAndGetResponse(self, "00 CA 00 6E 00") + " "    # GET DATA - Application Related Data
+    tmpLen = int(resp[3]+resp[4], 16)
+    offset = 2
+    print "Application Related Data:\n\tApplication ID ...........: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 2
+
+    tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    print "\tHistorical Bytes .........: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 4
+
+    tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    print "\tExtended Capabilities ....: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 1
+
+    tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    print "\tAlgorithm Attributes\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 1
+
+    tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 1
+
+    tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + tmpLen + 2
+
+    print "\tPW1 status bytes\n\t\tPW1 status .......: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tPW1 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tRC max length ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tPW3 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tPW1 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tRC remaining .....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 1
+    print "\t\tPW3 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    offset = offset + 3
+
+    tmpLen = 20
+    print "\tKey Fingerprints\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 20
+    print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 20
+    print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 22
+
+    tmpLen = 20
+    print "\tCA Fingerprints\n\t\tCA 1 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 20
+    print "\t\tCA 2 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 20
+    print "\t\tCA 3 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    offset = offset + 22
+
+    tmpLen = 4
+    tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+    tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+    t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+    print "\tKey Generation Times\n\t\tSignature: .......: " + t
+    offset = offset + 4
+    tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+    tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+    t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+    print "\t\tDecryption: ......: " + t
+    offset = offset + 4
+    tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
+    tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
+    t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
+    print "\t\tAuthentication ...: " + t + "\n"
+
+
+def getPWBytes(self):
+    resp = sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
+    print "\tPW1 tries remaining ......: {}".format(int(resp[12] + resp[13]))
+    print "\tRC tries remaining .......: {}".format(int(resp[15] + resp[16]))
+    print "\tPW3 tries remaining ......: {}".format(int(resp[18] + resp[19])) + "\n"
+
+
+def getCRD(self):
+    resp = sendAndGetResponse(self, "00 CA 00 65 00") + " "    # GET DATA - Cardholder Related Data
+    nLen = int(resp[3]+resp[4], 16)
+    offset = 2
+    name = bytearray.fromhex(resp[offset*3:(offset+nLen)*3]).decode()
+    print "Cardholder Related Data:\n\t\tName: ............: " + name
+    offset = offset + nLen + 2
+
+    lLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
+    offset = offset + 1
+    lang = bytearray.fromhex(resp[offset*3:(offset+lLen)*3]).decode()
+    print "\t\tLanguage prefs ...: " + lang
+    offset = offset + lLen + 3
+
+    if (resp[(offset*3)+1] == "1"):
+        print "\t\tSex ..............: Male\n"
+    elif (resp[(offset*3)+1] == "2"):
+        print "\t\tSex ..............: Female\n"
+    else:
+        print "\t\tSex ..............: Not set\n"
+
+
+def getLoginData(self):
+    resp = sendAndGetResponse(self, "00 CA 00 5E 00") + " "    # GET DATA - Login Data
+    print "\tLogin Data ...............: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+
+
+def getURL(self):
+    resp = sendAndGetResponse(self, "00 CA 5F 50 00") + " "    # GET DATA - URL
+    print "\tPublic Key URL ...........: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+
+
+def getDSCnt(self):
+    resp = sendAndGetResponse(self, "00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
+    dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
+    print "\tSignature Counter.........: {}\n".format(dsCnt)
+
+
 def getData(self):
     print "\n\t(8) GET DATA"
 
     select = -1
     while True:
         print "Please enter the type of data you would like to get:"
-        print "\t(1) GET AID"
-        print "\t(2) GET Login Data"
-        print "\t(3) GET URL"
-        print "\t(4) GET Historical Bytes"
-        print "\t(5) GET Cardholder Related Data"
-        print "\t(6) GET Application Related Data"
-        print "\t(7) GET Security Support Template"
-        print "\t(8) GET Cardholder Certificate"
-        print "\t(9) GET PW Status Bytes"
+        print "\t(1) List all available data"
+        print "\t(2) GET Cardholder Certificate"
+        print "\t(3) GET PW Status Bytes"
+        print "\t(4) GET Public Key"
         print "\t(0) Back"
         try:
             select = int(raw_input("Your selection: "))
@@ -190,126 +321,24 @@ def getData(self):
             pass
 
         if (select == 0):
+            print ""
             break
         elif (select == 1):
-            resp = sendAndGetResponse(self, "00 CA 00 4F 00") + " "    # GET DATA - AID
-            print "AID: " + resp[:len(resp)-6] + "\n"
+            getARD(self)
+            getLoginData(self)
+            getURL(self)
+            getDSCnt(self)
+            getCRD(self)
         elif (select == 2):
-            resp = sendAndGetResponse(self, "00 CA 00 5E 00") + " "    # GET DATA - Login Data
-            print "Login Data: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
-        elif (select == 3):
-            resp = sendAndGetResponse(self, "00 CA 5F 50 00") + " "    # GET DATA - URL
-            print "URL: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
-        elif (select == 4):
-            resp = sendAndGetResponse(self, "00 CA 5F 52 00") + " "    # GET DATA - Historical Bytes
-            print "Historical Bytes: " + resp[:len(resp)-6] + "\n"
-        elif (select == 5):
-            resp = sendAndGetResponse(self, "00 CA 00 65 00") + " "    # GET DATA - Cardholder Related Data
-            nLen = int(resp[3]+resp[4], 16)
-            offset = 2
-            name = bytearray.fromhex(resp[offset*3:(offset+nLen)*3]).decode()
-            print "Cardholder Related Data:\n\tName:\t\t" + name
-            offset = offset + nLen + 2
-
-            lLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            lang = bytearray.fromhex(resp[offset*3:(offset+lLen)*3]).decode()
-            print "\tLanguage:\t" + lang
-            offset = offset + lLen + 3
-
-            if (resp[(offset*3)+1] == "1"):
-                print "\tSex:\t\tMale\n"
-            elif (resp[(offset*3)+1] == "2"):
-                print "\tSex:\t\tFemale\n"
-            else:
-                print "\tSex:\t\tNot set\n"
-        elif (select == 6):
-            resp = sendAndGetResponse(self, "00 CA 00 6E 00") + " "    # GET DATA - Application Related Data
-            tmpLen = int(resp[3]+resp[4], 16)
-            offset = 2
-            print "Application Related Data:\n\tAID:\t\t\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 2
-
-            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            print "\tHistorical Bytes:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 4
-
-            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            print "\tExtended Capabilities:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 1
-
-            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            print "\tAlgorithm Attributes\n\t\tSignature:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 1
-
-            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            print "\t\tDecryption:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 1
-
-            tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
-            offset = offset + 1
-            print "\t\tAuthentication:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + tmpLen + 2
-
-            print "\tPW1 status bytes\n\t\tPW1 status:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tPW1 max length:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tRC max length:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tPW3 max length:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tPW1 remaining:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tRC remaining:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 1
-            print "\t\tPW3 remaining:\t" + resp[offset*3] + resp[offset*3+1]
-            offset = offset + 3
-
-            tmpLen = 20
-            print "\tKey Fingerprints\n\t\tSignature:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 20
-            print "\t\tDecryption:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 20
-            print "\t\tAuthentication:\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 22
-
-            tmpLen = 20
-            print "\tCA Fingerprints\n\t\tCA 1:\t\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 20
-            print "\t\tCA 2:\t\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 20
-            print "\t\tCA 3:\t\t" + resp[offset*3:(offset+tmpLen)*3]
-            offset = offset + 22
-
-            tmpLen = 4
-            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
-            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
-            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-            print "\tKey Generation Times\n\t\tSignature:\t" + t
-            offset = offset + 4
-            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
-            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
-            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-            print "\t\tDecryption:\t" + t
-            offset = offset + 4
-            tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
-            tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
-            t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-            print "\t\tAuthentication:\t" + t + "\n"
-        elif (select == 7):
-            resp = sendAndGetResponse(self, "00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
-            dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
-            print "Digital Signature Counter: {}\n".format(dsCnt)
-        elif (select == 8):
             resp = sendAndGetResponse(self, "00 CA 7F 21 00") + " "    # GET DATA - Cardholder Certificate
             print "Cardholder certificate (hex):\n" + resp[:len(resp)-6] + "\n"
-        elif (select == 9):
+        elif (select == 3):
             getPWBytes(self)                                           # GET DATA - PW Status Bytes
+        elif (select == 4):
+            keyType = promptForKeyType()
+            keyTag = getKeyTag(keyType)
+            resp = sendAndGetResponse(self, "00 47 81 00 02 " + keyTag + "00 00")
+            print "Modulus (hex): " + resp[9*3:265*3] + "\nExponent (hex): " + resp[267*3:270*3] + "\n"
         else:
             print "Invalid option\n"
         select = -1
@@ -347,24 +376,11 @@ def genAsymKey(self):
     if (not (verify(self, "83 "))):
         return False
 
-    keyType = 0
-    while True:
-        print "\nPlease enter the type of the key:"
-        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
-        try:
-            keyType = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (0 < keyType < 4):
-            break
-
+    keyType = promptForKeyType()
     keyTag = getKeyTag(keyType)
     resp = sendAndGetResponse(self, "00 47 80 00 02 " + keyTag + "00 00")
-
-    print resp
-
     pub = bytearray.fromhex(resp[9*3:265*3] + resp[267*3:270*3])
+
     if (not (putFP(self, pub, keyType))):
         return False
 
@@ -392,18 +408,6 @@ def importKey(self):
         except ValueError:
             print "Wrong password"
             f.seek(0)
-
-    keyType = 0
-    while True:
-        print "Please enter the type of the key:"
-        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
-        try:
-            keyType = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (0 < keyType < 4):
-            break
 
     e = '{0:06X}'.format(int(r.e))
     eStr = " ".join(e[i:i+2] for i in range(0, len(e), 2)) + " "
@@ -438,6 +442,7 @@ def importKey(self):
     lenFull = "5F 48 " + getLen(full)
 
     TAG = "4D "
+    keyType = promptForKeyType()
     keyTag = getKeyTag(keyType)
     lenStr = lenE+lenP+lenQ+lenPQ+lenDP+lenDQ+lenN
     offset = "00 7F 48 " + getLen(lenStr)
@@ -580,12 +585,60 @@ def putData(self):
         select = -1
 
 
+def resetRetryCounter(self):
+    select = -1
+    print "\n\t(2) CHANGE REFERENCE DATA"
+    while True:
+        print "Please select the way you would like to verify:"
+        print "\t(1) Using the Resetting Code (RC)"
+        print "\t(2) Using PW3"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            break
+        elif (select == 1):
+            pw = promptForPass("Please enter the resetting code (RC): ")
+            mode = "00 "
+            break
+        elif (select == 2):
+            pw = promptForPass("Please enter the PW3 password: ")
+            mode = "02 "
+            break
+        else:
+            print "Invalid option\n"
+        select = -1
+
+    newPW = promptForPass("Please enter the new PW1 password: ")
+    pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
+    newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
+    data = pwStr + newStr
+    command = "00 2C " + mode + "81 " + '{0:02X}'.format(int(len(data)/3)) + " " + data
+    if (sendAndGetResponse(self, command) == "90 00"):
+        print "\nOperation completed successfully\n"
+        return True
+    else:
+        print "\nOperation failed"
+        getPWBytes(self)
+        return False
+
+
 class handleConnection(SocketServer.BaseRequestHandler):
     def handle(self):
-        print 'New connection from: {}'.format(self.client_address[0])
+        print 'New connection from: {}\n'.format(self.client_address[0])
+
         select = -1
         while True:
-            print "\nPlease enter the type of operation you would like to perform:"
+            getARD(self)
+            getLoginData(self)
+            getURL(self)
+            getDSCnt(self)
+            getCRD(self)
+
+            print "Please enter the type of operation you would like to perform:"
             print "\t(1) VERIFY"
             print "\t(2) CHANGE REFERENCE DATA"
             print "\t(3) RESET RETRY COUNTER"
@@ -613,12 +666,12 @@ class handleConnection(SocketServer.BaseRequestHandler):
             elif (select == 2):
                 pass#
             elif (select == 3):
-                pass#
+                resetRetryCounter(self)
             elif (select == 4):
                 # TODO: remember to set pw1_status before PSO:CDS
                 pass#
             elif (select == 5):
-                pass#
+                intAuth(self)
             elif (select == 6):
                 if (genAsymKey(self)):
                     print "Key generated successfully"
@@ -629,10 +682,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
             elif (select == 8):
                 getData(self)
             elif (select == 9):
-                if (putData(self)):
-                    print "Put data success"
-                else:
-                    print "Put data failed/cancelled"
+                putData(self)
             elif (select == 10):
                 pass#
             elif (select == 11):
@@ -641,8 +691,6 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 pass#
             elif (select == 13):
                 pass#
-            else:
-                print "Invalid option"
             select = -1
 
 
