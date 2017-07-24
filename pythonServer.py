@@ -18,6 +18,8 @@ DESCRIPTION
     * Supports PIN verification
     * Supports importing RSA-2048 keys from file
     * Supports asymmetric key generation on the ESP32
+    * Supports putData fully
+    * Supports getData (partially for now)
  
 """
 import sys
@@ -57,6 +59,13 @@ def sendAndGetResponse(self, command):
     return sendAndGetResponses(self, command, "")
 
 
+def getPWBytes(self):
+    resp = sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
+    print 'PW1 tries remaining: ' + resp[13] + resp[14]
+    print ' RC tries remaining: ' + resp[16] + resp[17]
+    print 'PW3 tries remaining: ' + resp[19] + resp[20] + "\n"
+
+
 def verify(self, p2):
     while True:
         pw1 = getpass("Please enter the password: ")
@@ -73,6 +82,7 @@ def verify(self, p2):
         return True
     else:
         print "\nVerification failed"
+        getPWBytes(self)
         return False
 
 
@@ -165,9 +175,9 @@ def getData(self):
         print "\t(2) GET Login Data"
         print "\t(3) GET URL"
         print "\t(4) GET Historical Bytes"
-        print "\t(5) GET Cardholder Info"
+        print "\t(5) GET Cardholder Related Data"
         print "\t(6) GET Application Related Data"
-        print "\t(7) GET Security support template"
+        print "\t(7) GET Security Support Template"
         print "\t(8) GET Cardholder Certificate"
         print "\t(9) GET PW Status Bytes"
         print "\t(0) Back"
@@ -179,23 +189,34 @@ def getData(self):
         if (select == 0):
             break
         elif (select == 1):
-            print sendAndGetResponse(self,"00 CA 00 4F 00") + "\n"      # GET DATA - AID
+            resp = sendAndGetResponse(self, "00 CA 00 4F 00") + "\n"    # GET DATA - AID
+            print "AID: " + resp[:len(resp)-6] + "\n"
         elif (select == 2):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 00 5E 00") + "\n"    # GET DATA - Login Data
+            print "Login Data: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
         elif (select == 3):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 5F 50 00") + "\n"    # GET DATA - URL
+            print "URL: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
         elif (select == 4):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 5F 52 00") + "\n"    # GET DATA - Historical Bytes
+            print resp[:len(resp)-6] + "\n"
         elif (select == 5):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 00 65 00") + "\n"    # GET DATA - Cardholder Related Data
+            nLen = int(resp[3]+resp[4], 16)
+            name = bytearray.fromhex(resp[2*3:(2+nLen)*3]).decode()
+            print "Cardholder Info:\n\tName: " + name + "\n"
+            # TODO: parse more
         elif (select == 6):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 00 6E 00") + "\n"    # GET DATA - Application Related Data
+            # TODO: parse
         elif (select == 7):
-            pass#
+            resp = sendAndGetResponse(self, "00 CA 00 7A 00") + "\n"    # GET DATA - Security Support Template
+            # TODO: parse?
         elif (select == 8):
-            pass
+            resp = sendAndGetResponse(self, "00 CA 7F 21 00") + "\n"    # GET DATA - Cardholder Certificate
+            print resp[:len(resp)-6]
         elif (select == 9):
-            print sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"
+            getPWBytes(self)                                            # GET DATA - PW Status Bytes
         else:
             print "Invalid option\n"
         select = -1
@@ -268,7 +289,7 @@ def importKey(self):
             print "No such file or directory"
 
     while True:
-        pw = getpass("\nPlease enter the key password (optional): ")
+        pw = getpass("Please enter the key password (optional): ")
         try:
             r = RSA.importKey(f.read(), passphrase = pw)
             f.close()
@@ -279,7 +300,7 @@ def importKey(self):
 
     keyType = 0
     while True:
-        print "\nPlease enter the type of the key:"
+        print "Please enter the type of the key:"
         print "\t(1) Sig\n\t(2) Dec\n\t(3) Auth"
         try:
             keyType = int(raw_input("Your selection: "))
@@ -358,15 +379,28 @@ def importKey(self):
     return True
 
 
+def doPut(self, mesg, maxInp, tag):
+    while True:
+        inp = raw_input("\nPlease enter the " + mesg)
+        if (len(inp) <= maxInp):
+            break
+
+    iStr = " ".join("{0:02x}".format(ord(c)) for c in inp).upper() + " "
+    if (sendAndGetResponse(self, "00 DA " + tag + getLen(iStr) + iStr) == "90 00"):
+        print "Operation completed successfully\n"
+    else:
+        print "Operation failed\n"
+
+
 def putData(self):
     print "\nYou will need to verify the PW3 PIN"
     if (not (verify(self, "83 "))):
         return False
 
     select = -1
-    print "\n\t(9) PUT DATA\n"
+    print "\n\t(9) PUT DATA"
     while True:
-        print "\nPlease enter the type of data you would like to put:"
+        print "Please enter the type of data you would like to put:"
         print "\t(1) Name"
         print "\t(2) Login Data"
         print "\t(3) Language Preferences"
@@ -385,36 +419,69 @@ def putData(self):
         if (select == 0):
             break
         elif (select == 1):
-            pass#
+            doPut(self, "name (Max. 39 characters): ", 39, "00 5B ")
         elif (select == 2):
-            pass#
+            doPut(self, "login data (Max. 254 characters): ", 254, "00 5E ")
         elif (select == 3):
-            pass#
+            doPut(self, "language preferences (Max. 8 characters): ", 8, "5F 2D ")
         elif (select == 4):
-            pass#
+            while True:
+                inp = raw_input("\nPlease enter the sex (M)ale or (F)emale): ")
+                if (inp == "M" or inp == "m" or inp.upper() == "MALE"):
+                    sex = "31 "
+                    break
+                elif (inp == "F" or inp == "f" or inp.upper() == "FEMALE"):
+                    sex = "32 "
+                    break
+
+            if (sendAndGetResponse(self, "00 DA 5F 35 01 " + sex) == "90 00"):
+                print "Operation completed successfully\n"
+            else:
+                print "Operation failed\n"
         elif (select == 5):
-            pass#
+            doPut(self, "URL (Max. 254 characters): ", 254, "5F 50 ")
         elif (select == 6):
-            pass#
+            doPut(self, "cardholder certificate (Max. 1216 characters): ", 1216, "7F 21 ")
         elif (select == 7):
-            pass#
+            while True:
+                inp = raw_input("\nPlease enter PW1 status (0 or 1): ")
+                if (int(inp) == 0):
+                    val = "00 "
+                    break
+                elif (int(inp) == 1):
+                    val = "01 "
+                    break
+
+            if (sendAndGetResponse(self, "00 DA 00 C4 01 " + val) == "90 00"):
+                print "Operation completed successfully\n"
+            else:
+                print "Operation failed\n"
         elif (select == 8):
-            getData(self)
+            while True:
+                print "\nPlease enter the resetting code (RC): "
+                while True:
+                    pw1 = getpass("Please enter the password (Min. 8 char./Max. 127 char. or empty): ")
+                    if (len(pw1) == 0 or (len(pw1) >= 8 and len(pw1) <= 127)):
+                        break
+
+                pw2 = getpass("Please confirm the password: ")
+                if (pw1 == pw2):
+                    break
+                else:
+                    print "The passwords do not match"
+
+            pStr = " ".join("{0:02x}".format(ord(c)) for c in pw1).upper() + " "
+            if (sendAndGetResponse(self, "00 DA 00 D3 " + getLen(pStr) + pStr) == "90 00"):
+                print "Operation completed successfully\n"
+            else:
+                print "Operation failed\n"
         elif (select == 9):
             if (importKey(self)):
-                print "Key imported successfully"
+                print "The key was imported successfully\n"
             else:
-                print "Key import failed"
-        elif (select == 10):
-            pass#
-        elif (select == 11):
-            pass#
-        elif (select == 12):
-            pass#
-        elif (select == 13):
-            pass#
+                print "Key import failed\n"
         else:
-            print "Invalid option"
+            print "Invalid option\n"
         select = -1 
 
 
@@ -453,6 +520,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
             elif (select == 3):
                 pass#
             elif (select == 4):
+                # TODO: remember to set pw1_status before PSO:CDS
                 pass#
             elif (select == 5):
                 pass#
@@ -467,9 +535,9 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 getData(self)
             elif (select == 9):
                 if (putData(self)):
-                    print "Data put success"
+                    print "Put data success"
                 else:
-                    print "Data put failed/cancelled"
+                    print "Put data failed/cancelled"
             elif (select == 10):
                 pass#
             elif (select == 11):
