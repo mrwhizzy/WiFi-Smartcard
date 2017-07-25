@@ -24,6 +24,7 @@ DESCRIPTION
     * Supports internalAuthentication
     * Supports computeDigitalSignature
     * Supports decipher (?)
+    * Supports terminate/activate
 
 """
 import sys
@@ -187,8 +188,41 @@ def verifySelect(self):
             select = -1
 
 
+def handleTerminated(self):
+    print "\t----- TERMINATED -----"
+    select = -1
+    while True:
+        print "Please enter the type of operation you would like to perform:"
+        print "\t(1) ACTIVATE"
+        print "\t(0) Back\n"
+
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            return
+        elif (select == 1):
+            if (sendAndGetResponse(self, "00 44 00 00 00") == "90 00"):
+                print "Operation completed successfully\n"
+                return
+            else:
+                print "Operation failed\n"
+        else:
+            return
+
+        select = -1
+
+
+
+
 def getARD(self):
     resp = sendAndGetResponse(self, "00 CA 00 6E 00") + " "    # GET DATA - Application Related Data
+    if (resp[:5] == "69 85"):
+        handleTerminated(self)
+        return False
+
     tmpLen = int(resp[3]+resp[4], 16)
     offset = 2
     print "Application Related Data:\n\tApplication ID ...........: " + resp[offset*3:(offset+tmpLen)*3]
@@ -265,6 +299,7 @@ def getARD(self):
     tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
     t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
     print "\t\tAuthentication ...: " + t + "\n"
+    return True
 
 
 def getPWBytes(self):
@@ -387,6 +422,7 @@ def genAsymKey(self):
     if (not (verify(self, "83 "))):
         return False
 
+    print "\n\t(6) GENERATE ASYMMETRIC KEY"
     keyType = promptForKeyType()
     if (keyType == 0):
         return False
@@ -754,7 +790,10 @@ class handleConnection(SocketServer.BaseRequestHandler):
 
         select = -1
         while True:
-            getARD(self)
+            while True:     # Check for terminated status
+                if (getARD(self) == True):
+                    break
+
             getLoginData(self)
             getURL(self)
             getDSCnt(self)
@@ -770,8 +809,8 @@ class handleConnection(SocketServer.BaseRequestHandler):
             print "\t(7) GET CHALLENGE"
             print "\t(8) GET DATA"
             print "\t(9) PUT DATA"
-            print "\t(10) TERMINATE DF"
-            print "\t(11) ACTIVATE FILE"
+            print "\t(10) TERMINATE"
+            print "\t(11) ACTIVATE"
             print "\t(12) GET VERSION"
             print "\t(13) SET RETRIES"
             print "\t(0) QUIT"
@@ -805,9 +844,15 @@ class handleConnection(SocketServer.BaseRequestHandler):
             elif (select == 9):
                 putData(self)
             elif (select == 10):
-                pass#
+                if (sendAndGetResponse(self, "00 E6 00 00 00") == "90 00"):
+                    print "Operation completed successfully\n"
+                else:
+                    print "Operation failed\n"
             elif (select == 11):
-                pass#
+                if (sendAndGetResponse(self, "00 44 00 00 00") == "90 00"):
+                    print "Operation completed successfully\n"
+                else:
+                    print "Operation failed\n"
             elif (select == 12):
                 pass#
             elif (select == 13):
