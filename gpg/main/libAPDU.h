@@ -649,8 +649,8 @@ uint16_t verify(uint8_t mode) {
 /**
  * Provide the CHANGE REFERENCE DATA command (INS 24)
  *
- * Change the password specified using mode: - 81: PW1 - 82: PW3
- *
+ * Change the password specified using mode: - 81: PW1 - 82: PW3*
+ *                                  *probably means mode 83: PW3*
  * @param apdu
  * @param mode
  *            Password to be changed
