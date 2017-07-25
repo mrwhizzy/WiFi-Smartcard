@@ -832,6 +832,7 @@ uint16_t computeDigitalSignature(uint16_t* length) {
  */
 uint16_t decipher(uint16_t* length) {
     // DECIPHER
+    size_t len;
     if (!((pw1.validated == 1) && (pw1_modes[PW1_MODE_NO82] == 1))) {
         return SW_SECURITY_STATUS_NOT_SATISFIED;
     }
@@ -854,7 +855,6 @@ uint16_t decipher(uint16_t* length) {
     // Start at offset 1 to omit padding indicator byte
     uint8_t* inOffset = buffer + 1;
     uint8_t* outOffset = buffer + in_received;
-    size_t len;
 
     // in_received - 1 or in_received??
     if ((in_received - 1) != ((mbedtls_mpi_bitlen(&decKey.N) + 7) >> 3)) {
@@ -865,6 +865,9 @@ uint16_t decipher(uint16_t* length) {
             MBEDTLS_RSA_PRIVATE, &len, inOffset, outOffset, (BUFFER_MAX_LENGTH - in_received)) != 0) {
         return SW_UNKNOWN;  // Again, not really unknown...
     }
+
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
 
     memcpy(buffer, outOffset, len);  // * Rest of buffer is non-empty, again
     (*length) = len;

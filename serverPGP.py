@@ -21,6 +21,9 @@ DESCRIPTION
     * Supports putData fully
     * Supports getData fully
     * Supports resetRetryCounter
+    * Supports internalAuthentication
+    * Supports computeDigitalSignature
+    * Supports decipher (?)
 
 """
 import sys
@@ -109,7 +112,9 @@ def getTimeTag(key):
 
 def promptForPass(mesg):
     while True:
-        pw1 = getpass(mesg)
+        pw1 = getpass(mesg+" or 0 to cancel: ")
+        if (pw1 == "0"):
+            return 0
         pw2 = getpass("Please confirm the password: ")
         if (pw1 == pw2):
             return pw1
@@ -118,21 +123,24 @@ def promptForPass(mesg):
 
 
 def promptForKeyType():
-    keyType = 0
+    keyType = -1
     while True:
         print "\nPlease enter the type of the key:"
-        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication"
+        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication\n\t(0) Back"
         try:
             keyType = int(raw_input("Your selection: "))
         except ValueError:
             pass
 
-        if (0 < keyType < 4):
+        if (0 <= keyType < 4):
             return keyType
 
 
 def verify(self, p2):
-    pw1 = promptForPass("Please enter the password: ")
+    pw1 = promptForPass("Please enter the password")
+    if (pw1 == 0):
+        return False
+
     pw = " ".join("{:02x}".format(ord(c)) for c in pw1) + " "
     command = "00 20 00 " + p2 + '{0:02X}'.format(int(len(pw)/3)) + " " + pw
     if (sendAndGetResponse(self, command) == "90 00"):
@@ -161,7 +169,7 @@ def verifySelect(self):
 
         inval = False
         if (select == 0):
-            break
+            return
         else:
             if (select == 1):
                 p2 = "81 "              # VERIFY - PW1 81
@@ -322,7 +330,7 @@ def getData(self):
 
         if (select == 0):
             print ""
-            break
+            return
         elif (select == 1):
             getARD(self)
             getLoginData(self)
@@ -336,6 +344,9 @@ def getData(self):
             getPWBytes(self)                                           # GET DATA - PW Status Bytes
         elif (select == 4):
             keyType = promptForKeyType()
+            if (keyType == 0):
+                break
+
             keyTag = getKeyTag(keyType)
             resp = sendAndGetResponse(self, "00 47 81 00 02 " + keyTag + "00 00")
             print "Modulus (hex): " + resp[9*3:265*3] + "\nExponent (hex): " + resp[267*3:270*3] + "\n"
@@ -377,6 +388,9 @@ def genAsymKey(self):
         return False
 
     keyType = promptForKeyType()
+    if (keyType == 0):
+        return False
+
     keyTag = getKeyTag(keyType)
     resp = sendAndGetResponse(self, "00 47 80 00 02 " + keyTag + "00 00")
     pub = bytearray.fromhex(resp[9*3:265*3] + resp[267*3:270*3])
@@ -443,6 +457,9 @@ def importKey(self):
 
     TAG = "4D "
     keyType = promptForKeyType()
+    if (keyType == 0):
+        return False
+
     keyTag = getKeyTag(keyType)
     lenStr = lenE+lenP+lenQ+lenPQ+lenDP+lenDQ+lenN
     offset = "00 7F 48 " + getLen(lenStr)
@@ -517,7 +534,7 @@ def putData(self):
             pass
 
         if (select == 0):
-            break
+            return
         elif (select == 1):
             doPut(self, "name (Max. 39 characters): ", 39, "00 5B ")
         elif (select == 2):
@@ -587,7 +604,7 @@ def putData(self):
 
 def resetRetryCounter(self):
     select = -1
-    print "\n\t(2) CHANGE REFERENCE DATA"
+    print "\n\t(3) RESET RETRY COUNTER"
     while True:
         print "Please select the way you would like to verify:"
         print "\t(1) Using the Resetting Code (RC)"
@@ -599,20 +616,29 @@ def resetRetryCounter(self):
             pass
 
         if (select == 0):
-            break
+            return
         elif (select == 1):
-            pw = promptForPass("Please enter the resetting code (RC): ")
+            pw = promptForPass("Please enter the resetting code (RC)")
+            if (pw == 0):
+                return False
+
             mode = "00 "
             break
         elif (select == 2):
-            pw = promptForPass("Please enter the PW3 password: ")
+            pw = promptForPass("Please enter the PW3 password")
+            if (pw == 0):
+                return False
+
             mode = "02 "
             break
         else:
             print "Invalid option\n"
         select = -1
 
-    newPW = promptForPass("Please enter the new PW1 password: ")
+    newPW = promptForPass("Please enter the new PW1 password")
+    if (pw == 0):
+        return False
+
     pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
     newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
     data = pwStr + newStr
@@ -624,6 +650,102 @@ def resetRetryCounter(self):
         print "\nOperation failed"
         getPWBytes(self)
         return False
+
+
+def performOperation(self, head):
+    while True:
+        print "Please select the way of input (max. 245 bytes):"
+        print "\t(1) Import from file"
+        print "\t(2) Enter via keyboard"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            break
+        elif (select == 1):
+            while True:
+                filename = raw_input("\nPlease enter the filename: ")
+                try:
+                    f = open(filename, 'r')
+                    inp = f.read()
+                    if (len(inp) <= 245):
+                        break
+                    else:
+                        print "Input must be <= 245 bytes"
+                except IOError:
+                    print "No such file or directory"
+
+            f.close()
+            inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
+            command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
+            print sendAndGetResponse(self, command)
+        elif (select == 2):
+            while True:
+                inp = raw_input("Input (max. 245 characters): ")
+                if (len(inp) <= 245):
+                    break
+
+            inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
+            command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
+            print sendAndGetResponse(self, command)
+        else:
+            print "Invalid option\n"
+        select = -1
+
+
+def computeDigSign(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "81 "))):
+        return False
+
+    select = -1
+    print "\n\tCompute Digital Signature"
+    performOperation(self, "00 2A 9E 9A ")
+
+
+def decipher(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "82 "))):
+        return False
+
+    select = -1
+    print "\n\tDecipher"
+    performOperation(self, "00 2A 80 86 ")
+
+
+def intAuth(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "82 "))):
+        return False
+
+    select = -1
+    print "\n\t(5) INTERNAL AUTHENTICATE"
+    performOperation(self, "00 88 00 00 ")
+
+
+def performSecOp(self):
+    print "\n\t(4) PERFORM SECURITY OPERATION"
+    while True:
+        print "Please select the security operation you would like to perform:"
+        print "\t(1) Compute Digital Signature"
+        print "\t(2) Decipher"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            return
+        elif (select == 1):
+            computeDigSign(self)
+        elif (select == 2):
+            decipher(self)
+        else:
+            print "Invalid option\n"
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -660,7 +782,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
 
             if (select == 0):
                 print "\n\t(0) QUIT\n"
-                break
+                return
             elif (select == 1):
                 verifySelect(self)
             elif (select == 2):
@@ -668,8 +790,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
             elif (select == 3):
                 resetRetryCounter(self)
             elif (select == 4):
-                # TODO: remember to set pw1_status before PSO:CDS
-                pass#
+                performSecOp(self)
             elif (select == 5):
                 intAuth(self)
             elif (select == 6):
