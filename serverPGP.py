@@ -27,6 +27,7 @@ DESCRIPTION
     * Supports terminate/activate
     * Supports changeReferenceData
     * Supports getChallenge
+    * Supports setPinRetries
 
 """
 import sys
@@ -116,14 +117,10 @@ def getTimeTag(key):
 
 def promptForPass(mesg):
     while True:
-        pw1 = getpass(mesg+" or 0 to cancel: ")
-        if (pw1 == "0"):
+        pw = getpass(mesg+" or 0 to cancel: ")
+        if (pw == "0"):
             return 0
-        pw2 = getpass("Please confirm the password: ")
-        if (pw1 == pw2):
-            return pw1
-        else:
-            print "The passwords do not match\n"
+        return pw
 
 
 def promptForKeyType():
@@ -187,7 +184,6 @@ def verifySelect(self):
 
             if (not (inval)):
                 verify(self, p2)
-
             select = -1
 
 
@@ -214,7 +210,6 @@ def handleTerminated(self):
                 print "Operation failed\n"
         else:
             return
-
         select = -1
 
 
@@ -782,7 +777,6 @@ def performOperation(self, head):
             inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
             command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
             return sendAndGetResponse(self, command)
-
         select = -1
 
 
@@ -852,26 +846,54 @@ def performSecOp(self):
         select = -1
 
 
+def getByteNumber(mesg):
+    while True:
+        print mesg
+        try:
+            number = int(raw_input("Max value: 255, enter 0 to cancel: "))
+            if (0 <= number < 256):
+                break
+            else:
+                print "Invalid option\n"
+        except ValueError:
+            print "Invalid option\n"
+    return number
+
+
 def getChallenge(self):
     select = -1
     print "\n\t(7) GET CHALLENGE"
-    while True:
-        print "Please enter the length of the requested random number"
-        try:
-            length = int(raw_input("Max length 255, enter 0 to cancel: "))
-            break
-        except ValueError:
-            print "Invalid option\n"
+    length = getByteNumber("Please enter the length of the requested random number")
 
     if (length == 0):
         return
-    elif (0 < length < 256):
+    else:
         command = "00 84 00 00 " + '{0:02X}'.format(length) + " "
         resp = sendAndGetResponse(self, command)
         print "\nResponse: "+ resp[:len(resp)-6] + "\n"
+
+
+def setPinRetries(self):
+    print "\nYou will need to verify the PW3 PIN"
+    if (not (verify(self, "83 "))):
+        return False
+
+    print "\n\t(13) SET RETRIES"
+    p1 = getByteNumber("Please enter the number of retries for PW1")
+    if (p1 == 0):
+        return
+    rc = getByteNumber("Please enter the number of retries for the resetting code (RC)")
+    if (rc == 0):
+        return
+    p3 = getByteNumber("Please enter the number of retries for PW3")
+    if (p3 == 0):
+        return
+    c = "00 F2 00 00 03" + '{0:02X}'.format(p1) + '{0:02X}'.format(rc) + '{0:02X}'.format(p3) + " "
+    if (sendAndGetResponse(self, c) == "90 00"):
+        print "\nOperation completed successfully\n"
     else:
-        print "Invalid option\n"
-    select = -1
+        print "\nOperation failed\n"
+
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -890,19 +912,19 @@ class handleConnection(SocketServer.BaseRequestHandler):
             getCRD(self)
 
             print "Please enter the type of operation you would like to perform:"
-            print "\t(1) VERIFY"
-            print "\t(2) CHANGE REFERENCE DATA"
-            print "\t(3) RESET RETRY COUNTER"
-            print "\t(4) PERFORM SECURITY OPERATION"
-            print "\t(5) INTERNAL AUTHENTICATE"
-            print "\t(6) GENERATE ASYMMETRIC KEY"
-            print "\t(7) GET CHALLENGE"
-            print "\t(8) GET DATA"
-            print "\t(9) PUT DATA"
+            print "\t (1) VERIFY"
+            print "\t (2) CHANGE REFERENCE DATA"
+            print "\t (3) RESET RETRY COUNTER"
+            print "\t (4) PERFORM SECURITY OPERATION"
+            print "\t (5) INTERNAL AUTHENTICATE"
+            print "\t (6) GENERATE ASYMMETRIC KEY"
+            print "\t (7) GET CHALLENGE"
+            print "\t (8) GET DATA"
+            print "\t (9) PUT DATA"
             print "\t(10) TERMINATE"
             print "\t(11) ACTIVATE"
             print "\t(12) GET VERSION"
-            print "\t(13) SET RETRIES"
+            print "\t(13) SET PIN RETRIES"
             print "\t(0) QUIT"
             try:
                 select = int(raw_input("Your selection: "))
@@ -944,9 +966,11 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 else:
                     print "Operation failed\n"
             elif (select == 12):
-                pass#####################
+                print "\n\t(12) GET VERSION"
+                resp = sendAndGetResponse(self, "00 F1 00 00 00")
+                print "Version: " + resp[:len(resp)-6] + "\n"
             elif (select == 13):
-                pass#####################
+                setPinRetries(self)
             select = -1
 
 
