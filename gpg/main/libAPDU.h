@@ -2263,7 +2263,7 @@ void process(apdu_t apdu, outData* output) {
 
         // GET CHALLENGE
         case (uint8_t) 0x84:
-            status = getChallenge(apdu.Lc, &len);
+            status = getChallenge(apdu.Le, &len);
             break;
 
         // GET DATA

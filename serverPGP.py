@@ -26,6 +26,7 @@ DESCRIPTION
     * Supports decipher (?)
     * Supports terminate/activate
     * Supports changeReferenceData
+    * Supports getChallenge
 
 """
 import sys
@@ -820,7 +821,7 @@ def intAuth(self):
 
     select = -1
     print "\n\t(5) INTERNAL AUTHENTICATE"
-    resp =performOperation(self, "00 88 00 00 ")
+    resp = performOperation(self, "00 88 00 00 ")
     if (resp == "6A 88"):
         print "Authentication key not found\n"
     else:
@@ -849,6 +850,28 @@ def performSecOp(self):
         else:
             print "Invalid option\n"
         select = -1
+
+
+def getChallenge(self):
+    select = -1
+    print "\n\t(7) GET CHALLENGE"
+    while True:
+        print "Please enter the length of the requested random number"
+        try:
+            length = int(raw_input("Max length 255, enter 0 to cancel: "))
+            break
+        except ValueError:
+            print "Invalid option\n"
+
+    if (length == 0):
+        return
+    elif (0 < length < 256):
+        command = "00 84 00 00 " + '{0:02X}'.format(length) + " "
+        resp = sendAndGetResponse(self, command)
+        print "\nResponse: "+ resp[:len(resp)-6] + "\n"
+    else:
+        print "Invalid option\n"
+    select = -1
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -905,7 +928,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 else:
                     print "Key generation failed"
             elif (select == 7):
-                pass#####################
+                getChallenge(self)
             elif (select == 8):
                 getData(self)
             elif (select == 9):
