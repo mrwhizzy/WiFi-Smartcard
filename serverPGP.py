@@ -187,14 +187,14 @@ def verifySelect(self):
             select = -1
 
 
-def handleTerminated(self):
-    print "\t----- TERMINATED -----"
+def changeReferenceData(self):
     select = -1
+    print "\n\t(2) CHANGE REFERENCE DATA"
     while True:
-        print "Please enter the type of operation you would like to perform:"
-        print "\t(1) ACTIVATE"
-        print "\t(0) Back\n"
-
+        print "Please select the password you would like to change:"
+        print "\t(1) Change PW1"
+        print "\t(2) Change PW3"
+        print "\t(0) Back"
         try:
             select = int(raw_input("Your selection: "))
         except ValueError:
@@ -203,14 +203,263 @@ def handleTerminated(self):
         if (select == 0):
             return
         elif (select == 1):
-            if (sendAndGetResponse(self, "00 44 00 00 00") == "90 00"):
-                print "Operation completed successfully\n"
-                return
-            else:
-                print "Operation failed\n"
+            pw = promptForPass("Please enter the current PW1 password")
+            if (pw == 0):
+                return False
+
+            mode = "81 "
+            break
+        elif (select == 2):
+            pw = promptForPass("Please enter the current PW3 password")
+            if (pw == 0):
+                return False
+
+            mode = "83 "
+            break
         else:
-            return
+            print "Invalid option\n"
         select = -1
+
+    newPW = promptForPass("Please enter the new password")
+    if (pw == 0):
+        return False
+
+    pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
+    newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
+    data = pwStr + newStr
+    command = "00 24 00 " + mode + '{0:02X}'.format(int(len(data)/3)) + " " + data
+    if (sendAndGetResponse(self, command) == "90 00"):
+        print "\nOperation completed successfully\n"
+        return True
+    else:
+        print "\nOperation failed"
+        getPWBytes(self)
+        return False
+
+
+def resetRetryCounter(self):
+    select = -1
+    print "\n\t(3) RESET RETRY COUNTER"
+    while True:
+        print "Please select the way you would like to verify:"
+        print "\t(1) Using the Resetting Code (RC)"
+        print "\t(2) Using PW3"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            return
+        elif (select == 1):
+            pw = promptForPass("Please enter the resetting code (RC)")
+            if (pw == 0):
+                return False
+
+            mode = "00 "
+            break
+        elif (select == 2):
+            print "\nYou will need to verify the PW3 PIN"
+            if (not (verify(self, "83 "))):
+                return False
+
+            mode = "02 "
+            break
+        else:
+            print "Invalid option\n"
+        select = -1
+
+    newPW = promptForPass("Please enter the new PW1 password")
+    if (newPW == 0):
+        return False
+
+    newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
+    if (select == 1):
+        pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
+        data = pwStr + newStr
+    else:
+        data = newStr
+
+    command = "00 2C " + mode + "81 " + '{0:02X}'.format(int(len(data)/3)) + " " + data
+    if (sendAndGetResponse(self, command) == "90 00"):
+        print "\nOperation completed successfully\n"
+        return True
+    else:
+        print "\nOperation failed"
+        getPWBytes(self)
+        return False
+
+
+def performOperation(self, head):
+    while True:
+        print "Please select the way of input (max. 245 bytes):"
+        print "\t(1) Import from file"
+        print "\t(2) Enter via keyboard"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            break
+        elif ((select != 1) and (select != 2)):
+            print "Invalid option\n"
+        else:
+            if (select == 1):
+                while True:
+                    filename = raw_input("\nPlease enter the filename: ")
+                    try:
+                        f = open(filename, 'r')
+                        inp = f.read()
+                        if (len(inp) <= 245):
+                            break
+                        else:
+                            print "Input must be <= 245 bytes"
+                    except IOError:
+                        print "No such file or directory"
+
+                f.close()
+            elif (select == 2):
+                while True:
+                    inp = raw_input("Input (max. 245 characters): ")
+                    if (len(inp) <= 245):
+                        break            
+
+            inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
+            command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
+            return sendAndGetResponse(self, command)
+        select = -1
+
+
+def computeDigSign(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "81 "))):
+        return False
+
+    select = -1
+    print "\n\tCompute Digital Signature"
+    resp = performOperation(self, "00 2A 9E 9A ")
+    if (resp == "6A 88"):
+        print "Signature key not found\n"
+    else:
+        print resp[:len(resp)-6]
+
+
+def decipher(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "82 "))):
+        return False
+
+    select = -1
+    print "\n\tDecipher"
+    resp = performOperation(self, "00 2A 80 86 ")
+    if (resp == "6A 88"):
+        print "Decryption key not found\n"
+    else:
+        print resp[:len(resp)-6]
+
+
+def performSecOp(self):
+    select = -1
+    print "\n\t(4) PERFORM SECURITY OPERATION"
+    while True:
+        print "Please select the security operation you would like to perform:"
+        print "\t(1) Compute Digital Signature"
+        print "\t(2) Decipher"
+        print "\t(0) Back"
+        try:
+            select = int(raw_input("Your selection: "))
+        except ValueError:
+            pass
+
+        if (select == 0):
+            return
+        elif (select == 1):
+            computeDigSign(self)
+        elif (select == 2):
+            decipher(self)
+        else:
+            print "Invalid option\n"
+        select = -1
+
+
+def intAuth(self):
+    print "\nYou will need to verify the PW1 PIN"
+    if (not (verify(self, "82 "))):
+        return False
+
+    select = -1
+    print "\n\t(5) INTERNAL AUTHENTICATE"
+    resp = performOperation(self, "00 88 00 00 ")
+    if (resp == "6A 88"):
+        print "Authentication key not found\n"
+    else:
+        print resp[:len(resp)-6]
+
+
+def putFP(self, data, keyType):       # Generate SHA1 fingerprint
+    h = SHA.new()
+    h.update(data)
+    hStr = h.hexdigest().upper()
+    fpStr = " ".join(hStr[i:i+2] for i in range(0, len(hStr), 2)) + " "
+    tagFP = getFPTag(keyType)
+    lenFP = getLen(fpStr)
+    apdu = "00 DA 00 "+tagFP+lenFP+fpStr
+
+    if (sendAndGetResponse(self, apdu) != "90 00"):
+        return False
+
+    return True
+
+
+def putTime(self, keyType):           # Put the current timestamp
+    timest = '{0:04X}'.format(int(time.time()))
+    tsStr = " ".join(timest[i:i+2] for i in range(0, len(timest), 2)) + " "
+    tagTime = getTimeTag(keyType)
+    lenTS = getLen(tsStr)
+    apdu = "00 DA 00 "+tagTime+lenTS+tsStr
+    if (sendAndGetResponse(self, apdu) != "90 00"):
+        return False
+
+    return True
+
+
+def genAsymKey(self):
+    print "\nYou will need to verify the PW3 PIN"
+    if (not (verify(self, "83 "))):
+        return False
+
+    print "\n\t(6) GENERATE ASYMMETRIC KEY"
+    keyType = promptForKeyType()
+    if (keyType == 0):
+        return False
+
+    keyTag = getKeyTag(keyType)
+    resp = sendAndGetResponse(self, "00 47 80 00 02 " + keyTag + "00 00")
+    pub = bytearray.fromhex(resp[9*3:265*3] + resp[267*3:270*3])
+
+    if (not (putFP(self, pub, keyType))):
+        return False
+
+    if (not (putTime(self, keyType))):
+        return False
+
+    return True
+
+
+def getChallenge(self):
+    select = -1
+    print "\n\t(7) GET CHALLENGE"
+    length = getByteNumber("Please enter the length of the requested random number")
+
+    if (length == 0):
+        return
+    else:
+        command = "00 84 00 00 " + '{0:02X}'.format(length) + " "
+        resp = sendAndGetResponse(self, command)
+        print "\nResponse: "+ resp[:len(resp)-6] + "\n"
 
 
 def getARD(self):
@@ -298,11 +547,20 @@ def getARD(self):
     return True
 
 
-def getPWBytes(self):
-    resp = sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
-    print "\tPW1 tries remaining ......: {}".format(int(resp[12] + resp[13]))
-    print "\tRC tries remaining .......: {}".format(int(resp[15] + resp[16]))
-    print "\tPW3 tries remaining ......: {}".format(int(resp[18] + resp[19])) + "\n"
+def getLoginData(self):
+    resp = sendAndGetResponse(self, "00 CA 00 5E 00") + " "    # GET DATA - Login Data
+    print "\tLogin Data ...............: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+
+
+def getURL(self):
+    resp = sendAndGetResponse(self, "00 CA 5F 50 00") + " "    # GET DATA - URL
+    print "\tPublic Key URL ...........: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+
+
+def getDSCnt(self):
+    resp = sendAndGetResponse(self, "00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
+    dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
+    print "\tSignature Counter.........: {}\n".format(dsCnt)
 
 
 def getCRD(self):
@@ -327,20 +585,11 @@ def getCRD(self):
         print "\t\tSex ..............: Not set\n"
 
 
-def getLoginData(self):
-    resp = sendAndGetResponse(self, "00 CA 00 5E 00") + " "    # GET DATA - Login Data
-    print "\tLogin Data ...............: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
-
-
-def getURL(self):
-    resp = sendAndGetResponse(self, "00 CA 5F 50 00") + " "    # GET DATA - URL
-    print "\tPublic Key URL ...........: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
-
-
-def getDSCnt(self):
-    resp = sendAndGetResponse(self, "00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
-    dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
-    print "\tSignature Counter.........: {}\n".format(dsCnt)
+def getPWBytes(self):
+    resp = sendAndGetResponse(self, "00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
+    print "\tPW1 tries remaining ......: {}".format(int(resp[12] + resp[13]))
+    print "\tRC tries remaining .......: {}".format(int(resp[15] + resp[16]))
+    print "\tPW3 tries remaining ......: {}".format(int(resp[18] + resp[19])) + "\n"
 
 
 def getData(self):
@@ -386,54 +635,17 @@ def getData(self):
         select = -1
 
 
-def putFP(self, data, keyType):       # Generate SHA1 fingerprint
-    h = SHA.new()
-    h.update(data)
-    hStr = h.hexdigest().upper()
-    fpStr = " ".join(hStr[i:i+2] for i in range(0, len(hStr), 2)) + " "
-    tagFP = getFPTag(keyType)
-    lenFP = getLen(fpStr)
-    apdu = "00 DA 00 "+tagFP+lenFP+fpStr
+def doPut(self, mesg, maxInp, tag):
+    while True:
+        inp = raw_input("\nPlease enter the " + mesg)
+        if (len(inp) <= maxInp):
+            break
 
-    if (sendAndGetResponse(self, apdu) != "90 00"):
-        return False
-
-    return True
-
-
-def putTime(self, keyType):           # Put the current timestamp
-    timest = '{0:04X}'.format(int(time.time()))
-    tsStr = " ".join(timest[i:i+2] for i in range(0, len(timest), 2)) + " "
-    tagTime = getTimeTag(keyType)
-    lenTS = getLen(tsStr)
-    apdu = "00 DA 00 "+tagTime+lenTS+tsStr
-    if (sendAndGetResponse(self, apdu) != "90 00"):
-        return False
-
-    return True
-
-
-def genAsymKey(self):
-    print "\nYou will need to verify the PW3 PIN"
-    if (not (verify(self, "83 "))):
-        return False
-
-    print "\n\t(6) GENERATE ASYMMETRIC KEY"
-    keyType = promptForKeyType()
-    if (keyType == 0):
-        return False
-
-    keyTag = getKeyTag(keyType)
-    resp = sendAndGetResponse(self, "00 47 80 00 02 " + keyTag + "00 00")
-    pub = bytearray.fromhex(resp[9*3:265*3] + resp[267*3:270*3])
-
-    if (not (putFP(self, pub, keyType))):
-        return False
-
-    if (not (putTime(self, keyType))):
-        return False
-
-    return True
+    iStr = " ".join("{0:02x}".format(ord(c)) for c in inp).upper() + " "
+    if (sendAndGetResponse(self, "00 DA " + tag + getLen(iStr) + iStr) == "90 00"):
+        print "Operation completed successfully\n"
+    else:
+        print "Operation failed\n"
 
 
 def importKey(self):
@@ -526,19 +738,6 @@ def importKey(self):
         return False
 
     return True
-
-
-def doPut(self, mesg, maxInp, tag):
-    while True:
-        inp = raw_input("\nPlease enter the " + mesg)
-        if (len(inp) <= maxInp):
-            break
-
-    iStr = " ".join("{0:02x}".format(ord(c)) for c in inp).upper() + " "
-    if (sendAndGetResponse(self, "00 DA " + tag + getLen(iStr) + iStr) == "90 00"):
-        print "Operation completed successfully\n"
-    else:
-        print "Operation failed\n"
 
 
 def putData(self):
@@ -634,14 +833,14 @@ def putData(self):
         select = -1
 
 
-def resetRetryCounter(self):
+def handleTerminated(self):
+    print "\n\t(10) TERMINATE"
     select = -1
-    print "\n\t(3) RESET RETRY COUNTER"
     while True:
-        print "Please select the way you would like to verify:"
-        print "\t(1) Using the Resetting Code (RC)"
-        print "\t(2) Using PW3"
-        print "\t(0) Back"
+        print "Please enter the type of operation you would like to perform:"
+        print "\t(1) ACTIVATE"
+        print "\t(0) Back\n"
+
         try:
             select = int(raw_input("Your selection: "))
         except ValueError:
@@ -650,199 +849,13 @@ def resetRetryCounter(self):
         if (select == 0):
             return
         elif (select == 1):
-            pw = promptForPass("Please enter the resetting code (RC)")
-            if (pw == 0):
-                return False
-
-            mode = "00 "
-            break
-        elif (select == 2):
-            print "\nYou will need to verify the PW3 PIN"
-            if (not (verify(self, "83 "))):
-                return False
-
-            mode = "02 "
-            break
+            if (sendAndGetResponse(self, "00 44 00 00 00") == "90 00"):
+                print "Operation completed successfully\n"
+                return
+            else:
+                print "Operation failed\n"
         else:
-            print "Invalid option\n"
-        select = -1
-
-    newPW = promptForPass("Please enter the new PW1 password")
-    if (newPW == 0):
-        return False
-
-    newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
-    if (select == 1):
-        pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
-        data = pwStr + newStr
-    else:
-        data = newStr
-
-    command = "00 2C " + mode + "81 " + '{0:02X}'.format(int(len(data)/3)) + " " + data
-    if (sendAndGetResponse(self, command) == "90 00"):
-        print "\nOperation completed successfully\n"
-        return True
-    else:
-        print "\nOperation failed"
-        getPWBytes(self)
-        return False
-
-
-def changeReferenceData(self):
-    select = -1
-    print "\n\t(2) CHANGE REFERENCE DATA"
-    while True:
-        print "Please select the password you would like to change:"
-        print "\t(1) Change PW1"
-        print "\t(2) Change PW3"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (select == 0):
             return
-        elif (select == 1):
-            pw = promptForPass("Please enter the current PW1 password")
-            if (pw == 0):
-                return False
-
-            mode = "81 "
-            break
-        elif (select == 2):
-            pw = promptForPass("Please enter the current PW3 password")
-            if (pw == 0):
-                return False
-
-            mode = "83 "
-            break
-        else:
-            print "Invalid option\n"
-        select = -1
-
-    newPW = promptForPass("Please enter the new password")
-    if (pw == 0):
-        return False
-
-    pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
-    newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
-    data = pwStr + newStr
-    command = "00 24 00 " + mode + '{0:02X}'.format(int(len(data)/3)) + " " + data
-    if (sendAndGetResponse(self, command) == "90 00"):
-        print "\nOperation completed successfully\n"
-        return True
-    else:
-        print "\nOperation failed"
-        getPWBytes(self)
-        return False
-
-
-def performOperation(self, head):
-    while True:
-        print "Please select the way of input (max. 245 bytes):"
-        print "\t(1) Import from file"
-        print "\t(2) Enter via keyboard"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (select == 0):
-            break
-        elif ((select != 1) and (select != 2)):
-            print "Invalid option\n"
-        else:
-            if (select == 1):
-                while True:
-                    filename = raw_input("\nPlease enter the filename: ")
-                    try:
-                        f = open(filename, 'r')
-                        inp = f.read()
-                        if (len(inp) <= 245):
-                            break
-                        else:
-                            print "Input must be <= 245 bytes"
-                    except IOError:
-                        print "No such file or directory"
-
-                f.close()
-            elif (select == 2):
-                while True:
-                    inp = raw_input("Input (max. 245 characters): ")
-                    if (len(inp) <= 245):
-                        break            
-
-            inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
-            command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
-            return sendAndGetResponse(self, command)
-        select = -1
-
-
-def computeDigSign(self):
-    print "\nYou will need to verify the PW1 PIN"
-    if (not (verify(self, "81 "))):
-        return False
-
-    select = -1
-    print "\n\tCompute Digital Signature"
-    resp = performOperation(self, "00 2A 9E 9A ")
-    if (resp == "6A 88"):
-        print "Signature key not found\n"
-    else:
-        print resp[:len(resp)-6]
-
-
-def decipher(self):
-    print "\nYou will need to verify the PW1 PIN"
-    if (not (verify(self, "82 "))):
-        return False
-
-    select = -1
-    print "\n\tDecipher"
-    resp = performOperation(self, "00 2A 80 86 ")
-    if (resp == "6A 88"):
-        print "Decryption key not found\n"
-    else:
-        print resp[:len(resp)-6]
-
-
-def intAuth(self):
-    print "\nYou will need to verify the PW1 PIN"
-    if (not (verify(self, "82 "))):
-        return False
-
-    select = -1
-    print "\n\t(5) INTERNAL AUTHENTICATE"
-    resp = performOperation(self, "00 88 00 00 ")
-    if (resp == "6A 88"):
-        print "Authentication key not found\n"
-    else:
-        print resp[:len(resp)-6]
-
-
-def performSecOp(self):
-    select = -1
-    print "\n\t(4) PERFORM SECURITY OPERATION"
-    while True:
-        print "Please select the security operation you would like to perform:"
-        print "\t(1) Compute Digital Signature"
-        print "\t(2) Decipher"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (select == 0):
-            return
-        elif (select == 1):
-            computeDigSign(self)
-        elif (select == 2):
-            decipher(self)
-        else:
-            print "Invalid option\n"
         select = -1
 
 
@@ -858,19 +871,6 @@ def getByteNumber(mesg):
         except ValueError:
             print "Invalid option\n"
     return number
-
-
-def getChallenge(self):
-    select = -1
-    print "\n\t(7) GET CHALLENGE"
-    length = getByteNumber("Please enter the length of the requested random number")
-
-    if (length == 0):
-        return
-    else:
-        command = "00 84 00 00 " + '{0:02X}'.format(length) + " "
-        resp = sendAndGetResponse(self, command)
-        print "\nResponse: "+ resp[:len(resp)-6] + "\n"
 
 
 def setPinRetries(self):
@@ -893,7 +893,6 @@ def setPinRetries(self):
         print "\nOperation completed successfully\n"
     else:
         print "\nOperation failed\n"
-
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -961,6 +960,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 else:
                     print "Operation failed\n"
             elif (select == 11):
+                print "\n\t(11) ACTIVATE"
                 if (sendAndGetResponse(self, "00 44 00 00 00") == "90 00"):
                     print "Operation completed successfully\n"
                 else:
