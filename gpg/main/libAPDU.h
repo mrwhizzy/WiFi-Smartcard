@@ -397,7 +397,7 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
     if (isSigEmpty == 0) {
-        readKey(0xB6);
+        ERRORCHK(readKey(0xB6), return 1);
     }
     ERRORCHK(restoreBuf("/spiflash/sigAttr.dat", sigAttributes, sizeof(sigAttributes)), return 1);
     ERRORCHK(restoreBuf("/spiflash/sigFP.dat", sigFP, sizeof(sigFP)), return 1);
@@ -405,7 +405,7 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("isDecEmpty", &isDecEmpty, 0, 8), return 1);
     if (isDecEmpty == 0) {
-        readKey(0xB8);
+        ERRORCHK(readKey(0xB8), return 1);
     }
     ERRORCHK(restoreBuf("/spiflash/decAttr.dat", decAttributes, sizeof(decAttributes)), return 1);
     ERRORCHK(restoreBuf("/spiflash/decFP.dat", decFP, sizeof(decFP)), return 1);
@@ -413,7 +413,7 @@ uint8_t restoreState() {
 
     ERRORCHK(restoreVar("isAuthEmpty", &isAuthEmpty, 0, 8), return 1);
     if (isAuthEmpty == 0) {
-        readKey(0xA4);
+        ERRORCHK(readKey(0xA4), return 1);
     }
     ERRORCHK(restoreBuf("/spiflash/autAttr.dat", authAttributes, sizeof(authAttributes)), return 1);
     ERRORCHK(restoreBuf("/spiflash/authFP.dat", authFP, sizeof(authFP)), return 1);
@@ -807,10 +807,26 @@ uint16_t computeDigitalSignature(uint16_t* length) {
     }
 
     uint8_t* outOffset = buffer + in_received;
-    if(mbedtls_rsa_pkcs1_encrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg,
-            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset) != 0) {
+    int ret;
+    if (mbedtls_rsa_check_privkey(&sigKey) != 0) {
+        ESP_LOGE("computeDigitalSignature", "Key check failed");
+    }
+
+    if((ret = mbedtls_rsa_pkcs1_encrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg,
+            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset)) != 0) {
         return SW_UNKNOWN;  // Again, not really unknown...
     }
+
+    unsigned char result[1024];
+    memset(result, '\0', 1024);
+    size_t rsaLen;
+    rsaLen = (mbedtls_mpi_bitlen(&sigKey.N) + 7) >> 3;
+    if((ret = mbedtls_rsa_pkcs1_decrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg, 
+                MBEDTLS_RSA_PUBLIC, &rsaLen, outOffset, result, 1024)) != 0) {
+        ESP_LOGE("TAG", "\nError:\tmbedtls_rsa_pkcs1_decrypt returned -0x%04x\n", -ret);
+    }
+    result[rsaLen] = '\0';      // worst case, stop at char 256
+
 
     mbedtls_ctr_drbg_free(&ctr_drbg);
     mbedtls_entropy_free(&entropy);
@@ -1104,7 +1120,6 @@ uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
         }
 
         if (keyGen(buffer[0]) != 0) {
-            ESP_LOGE("FU", "THIS");
             return SW_UNKNOWN;
         }
 
@@ -1118,7 +1133,6 @@ uint16_t genAsymKey(uint8_t mode, uint16_t* ret) {
     mbedtls_rsa_context* key = getKey(buffer[0], &err);
     if (err != 0) {
         (*ret) = 0;
-        ESP_LOGE("FU", "THAT");
         return SW_UNKNOWN;
     }
     
@@ -1910,7 +1924,7 @@ uint16_t importKey() {
         goto cleanup;
     }
 
-    int ret;
+    int ret;    // Write the key to a file in the flash memory
     if ((ret = mbedtls_mpi_write_file("N = " , &key->N , 16, fpriv)) != 0 ||
         (ret = mbedtls_mpi_write_file("E = " , &key->E , 16, fpriv)) != 0 ||
         (ret = mbedtls_mpi_write_file("D = " , &key->D , 16, fpriv)) != 0 ||
@@ -1925,9 +1939,11 @@ uint16_t importKey() {
         goto cleanup;
     }
     fclose(fpriv);
+
+    key->len = (mbedtls_mpi_bitlen(&key->N) + 7) >> 3;
     (*isEmpty) = 0;
     if (updateKeyStatus() != 0) {
-        return 1;
+        return SW_UNKNOWN;
     }
 
     status = SW_NO_ERROR;

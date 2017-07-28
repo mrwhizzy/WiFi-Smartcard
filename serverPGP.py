@@ -32,12 +32,10 @@ DESCRIPTION
 """
 import sys
 import time
-import binascii
 import SocketServer
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
 from getpass import getpass
-from socket import error as SocketError
 
 
 def checkResp(resp):
