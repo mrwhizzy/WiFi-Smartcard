@@ -313,10 +313,10 @@ uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
 }
 
 // Function just to read and print the keys from the flash storage
-uint8_t readKey(uint8_t type) {
+uint16_t readKey(uint8_t type) {
     static const char *TAG = "readKey";
     mbedtls_rsa_context* key;
-    uint16_t ret = SW_NO_ERROR;
+    uint16_t ret;
     FILE *f;
 
     if (type == (uint8_t) 0xB6) {
@@ -364,6 +364,7 @@ uint8_t readKey(uint8_t type) {
         ret = SW_UNKNOWN;
         goto exitRK;
     }
+    ret = SW_NO_ERROR;
 
 exitRK:
     return ret;
@@ -807,26 +808,10 @@ uint16_t computeDigitalSignature(uint16_t* length) {
     }
 
     uint8_t* outOffset = buffer + in_received;
-    int ret;
-    if (mbedtls_rsa_check_privkey(&sigKey) != 0) {
-        ESP_LOGE("computeDigitalSignature", "Key check failed");
-    }
-
-    if((ret = mbedtls_rsa_pkcs1_encrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg,
-            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset)) != 0) {
+    if(mbedtls_rsa_pkcs1_encrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg,
+            MBEDTLS_RSA_PRIVATE, in_received, buffer, outOffset) != 0) {
         return SW_UNKNOWN;  // Again, not really unknown...
     }
-
-    unsigned char result[1024];
-    memset(result, '\0', 1024);
-    size_t rsaLen;
-    rsaLen = (mbedtls_mpi_bitlen(&sigKey.N) + 7) >> 3;
-    if((ret = mbedtls_rsa_pkcs1_decrypt(&sigKey, mbedtls_ctr_drbg_random, &ctr_drbg, 
-                MBEDTLS_RSA_PUBLIC, &rsaLen, outOffset, result, 1024)) != 0) {
-        ESP_LOGE("TAG", "\nError:\tmbedtls_rsa_pkcs1_decrypt returned -0x%04x\n", -ret);
-    }
-    result[rsaLen] = '\0';      // worst case, stop at char 256
-
 
     mbedtls_ctr_drbg_free(&ctr_drbg);
     mbedtls_entropy_free(&entropy);
@@ -871,8 +856,6 @@ uint16_t decipher(uint16_t* length) {
     // Start at offset 1 to omit padding indicator byte
     uint8_t* inOffset = buffer + 1;
     uint8_t* outOffset = buffer + in_received;
-
-    // in_received - 1 or in_received??
     if ((in_received - 1) != ((mbedtls_mpi_bitlen(&decKey.N) + 7) >> 3)) {
         return SW_DATA_INVALID;
     }

@@ -23,7 +23,7 @@ DESCRIPTION
     * Supports resetRetryCounter
     * Supports internalAuthentication
     * Supports computeDigitalSignature
-    * Supports decipher (?)
+    * Supports decipher
     * Supports terminate/activate
     * Supports changeReferenceData
     * Supports getChallenge
@@ -32,6 +32,7 @@ DESCRIPTION
 """
 import sys
 import time
+import base64
 import SocketServer
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
@@ -331,6 +332,17 @@ def performOperation(self, head):
         select = -1
 
 
+def reverseOp(inp, filename, passwd):
+        cip = ''.join(chr(x) for x in bytearray.fromhex(inp))
+        f = open(filename, 'r')
+        key = RSA.importKey(f.read(), passphrase = passwd)
+        f.close()
+        plain = key.encrypt(cip, "")
+        plStr = ''.join(["%02X "%ord(x) for x in plain[0]]).strip()
+        padding = plStr.find("FF 00 ") + 6
+        print "Reverse Operation: " + plain[0][padding/3:] + "\n"
+
+
 def computeDigSign(self):
     print "\nYou will need to verify the PW1 PIN"
     if (not (verify(self, "81 "))):
@@ -342,7 +354,29 @@ def computeDigSign(self):
     if (resp == "6A 88"):
         print "Signature key not found\n"
     else:
-        print resp[:len(resp)-6]
+        print "Ciphertext: " + resp[:len(resp)-6] + "\n"
+        reverseOp(resp[:len(resp)-6], "private.pem", "12345678")    # Temp hardcoded key
+
+
+def sendChain(self, dataIn, INS):
+    bytesSent = 0
+    bytesToSend = len(dataIn)/3
+    while (bytesToSend > 0):
+        if (bytesToSend > 254):
+            CLA = "10 "
+            LC = "FE "
+            tmpData = dataIn[bytesSent*3:(bytesSent+254)*3]
+            bytesToSend = bytesToSend - 254
+            bytesSent = bytesSent + 254
+            apdu = CLA+INS+LC+tmpData
+            sendAndGetResponse(self, apdu)
+        else:
+            CLA = "00 "
+            LC = '{0:02X}'.format(bytesToSend) + " "
+            tmpData = dataIn[bytesSent*3:]
+            bytesToSend = 0
+            apdu = CLA+INS+LC+tmpData
+            return sendAndGetResponse(self, apdu)
 
 
 def decipher(self):
@@ -350,13 +384,27 @@ def decipher(self):
     if (not (verify(self, "82 "))):
         return False
 
-    select = -1
     print "\n\tDecipher"
-    resp = performOperation(self, "00 2A 80 86 ")
+    while True:
+        filename = raw_input("Please enter the filename (enter 0 to cancel): ")
+        if (filename == "0"):
+            return
+        else: 
+            try:
+                f = open(filename, 'r')
+                inp = f.read()
+                f.close()
+                break
+            except IOError:
+                print "No such file or directory"
+
+    inpS = "00 " + " ".join("{:02x}".format(ord(c)) for c in inp).upper() + " "
+    resp = sendChain(self, inpS, "2A 80 86 ")
+
     if (resp == "6A 88"):
         print "Decryption key not found\n"
     else:
-        print resp[:len(resp)-6]
+        print "Decrypted: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
 
 
 def performSecOp(self):
@@ -394,7 +442,9 @@ def intAuth(self):
     if (resp == "6A 88"):
         print "Authentication key not found\n"
     else:
-        print resp[:len(resp)-6]
+        print "Ciphertext: " + resp[:len(resp)-6] + "\n"
+        reverseOp(resp[:len(resp)-6], "private.pem", "12345678")    # Temp hardcoded key
+
 
 
 def putFP(self, data, keyType):       # Generate SHA1 fingerprint
@@ -708,25 +758,8 @@ def importKey(self):
     lenAll = getLen(keyTag+offset+lenStr+lenFull+full)
     data = (TAG+lenAll+keyTag+offset+lenStr+lenFull+full)
 
-    bytesSent = 0
-    bytesToSend = len(data)/3
-    INS = "DB 3F FF "
-    while (bytesToSend > 0):
-        if (bytesToSend > 254):
-            CLA = "10 "
-            LC = "FE "
-            tmpData = data[bytesSent*3:(bytesSent+254)*3]
-            bytesToSend = bytesToSend - 254
-            bytesSent = bytesSent + 254
-        else:
-            CLA = "00 "
-            LC = '{0:02X}'.format(bytesToSend) + " "
-            tmpData = data[bytesSent*3:]
-            bytesToSend = 0
-
-        apdu = CLA+INS+LC+tmpData
-        if (sendAndGetResponse(self, apdu) != "90 00"):
-            return False
+    if (sendChain(self, data, "DB 3F FF ") != "90 00"):
+        return False
 
     pub = bytearray.fromhex(nStr+eStr)          # Get the public elements of the key
     if (not (putFP(self, pub, keyType))):
