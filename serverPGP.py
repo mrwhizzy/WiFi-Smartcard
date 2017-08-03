@@ -955,7 +955,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
             print "\t(11) ACTIVATE"
             print "\t(12) GET VERSION"
             print "\t(13) SET PIN RETRIES"
-            print "\t(0) QUIT"
+            print "\t(0)  QUIT"
             try:
                 select = int(raw_input("Your selection: "))
             except ValueError:
