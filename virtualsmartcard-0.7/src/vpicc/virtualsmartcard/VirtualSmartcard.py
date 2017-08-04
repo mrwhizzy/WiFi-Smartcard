@@ -24,7 +24,7 @@ from virtualsmartcard.utils import C_APDU, R_APDU, hexdump, inttostring
 from virtualsmartcard.CardGenerator import CardGenerator
 
 import socket, struct, sys, signal, atexit, smartcard, logging
-import SocketServer
+import SocketServer, time, threading
 
 
 
@@ -628,6 +628,41 @@ VPCD_CTRL_ON    = 1
 VPCD_CTRL_RESET = 2
 VPCD_CTRL_ATR	= 4
 
+
+# ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+newCommand = 0
+processing = 0
+command = ''
+response = ''
+class handleConnection(SocketServer.BaseRequestHandler):
+    def handle(self):
+        global newCommand
+        global processing
+        global command
+        global response
+
+        processing = 0
+        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
+        logging.info("command: %s\n, response: %s\n", command, response)
+        while True:
+            time.sleep(1)
+            if (newCommand == 1):
+                processing = 1
+                break
+
+        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
+        logging.info("command: %s\n, response: %s\n", command, response)
+        #logging.info("Command: %s\n", ' '.join(format(n,'02X') for n in command))
+        self.request.sendall(command)
+        response = self.request.recv(257).strip()
+        #logging.info("Command: %s\n",''.join(["%02X "%ord(x) for x in response]).strip())
+        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
+        logging.info("command: %s\n, response: %s\n", command, response)
+        processing = 0
+        newCommand = 0
+# ADDED CODE SECTRION ENDS HERE
+
+
 class VirtualICC(object): 
     """
     This class is responsible for maintaining the communication of the virtual
@@ -711,10 +746,13 @@ class VirtualICC(object):
 
         logging.info("Connected to virtual PCD at %s:%u", host, port)
 
-	# MAYBE ADD THIS HERE??? TODO
-        '''SocketServer.TCPServer.allow_reuse_address = True
+        # ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+        SocketServer.TCPServer.allow_reuse_address = True
         server = SocketServer.TCPServer(('10.42.0.1', 5511), handleConnection)
-        server.serve_forever() '''
+        srvThrd = threading.Thread(target=server.serve_forever)
+        srvThrd.daemon = True
+        srvThrd.start()
+        # ADDED CODE SECTION ENDS HERE
 
         signal.signal(signal.SIGINT, self.signalHandler)
         atexit.register(self.stop)
@@ -805,11 +843,30 @@ class VirtualICC(object):
                     logging.warning("Expected %u bytes, but received only %u",
                                     size, len(msg))
 
-		## THIS IS THE PLACE TODO
-                answer = self.os.execute(msg)
-                logging.info("Response APDU (%d Bytes):\n%s\n", len(answer),
-                             hexdump(answer))
-                self.__sendToVPICC(answer)
+                # ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+                if (True): # (mode == ESP):
+                    global newCommand
+                    global processing
+                    global command
+                    global response
+
+                    command = msg
+                    processing = 1
+                    newCommand = 1
+                    logging.info("Processing: %d\tnewCommand: %d\n", processing, newCommand)
+                    while True:
+                        if (processing == 0):
+                            logging.info("Response APDU (%d Bytes):\n%s\n", len(response),
+                                         hexdump(response))
+                            self.__sendToVPICC(response)
+                            break
+                else:
+                # ADDED CODE SECTION ENDS HERE
+                    answer = self.os.execute(msg)
+                    logging.info("Response APDU (%d Bytes):\n%s\n", len(answer),
+                                 hexdump(answer))
+                    self.__sendToVPICC(answer)
+
 
     def stop(self):
         self.sock.close()
@@ -818,4 +875,3 @@ class VirtualICC(object):
         if self.filename != None:
             self.cardGenerator.setCard(self.os.mf, self.os.SAM)
             self.cardGenerator.saveCard(self.filename)
- 
