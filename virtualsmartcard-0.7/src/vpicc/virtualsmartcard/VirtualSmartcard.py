@@ -642,22 +642,13 @@ class handleConnection(SocketServer.BaseRequestHandler):
         global response
 
         processing = 0
-        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
-        logging.info("command: %s\n, response: %s\n", command, response)
         while True:
-            time.sleep(1)
             if (newCommand == 1):
                 processing = 1
                 break
 
-        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
-        logging.info("command: %s\n, response: %s\n", command, response)
-        #logging.info("Command: %s\n", ' '.join(format(n,'02X') for n in command))
         self.request.sendall(command)
         response = self.request.recv(257).strip()
-        #logging.info("Command: %s\n",''.join(["%02X "%ord(x) for x in response]).strip())
-        logging.info("newCommand: %d\t, processing: %d\n", newCommand, processing)
-        logging.info("command: %s\n, response: %s\n", command, response)
         processing = 0
         newCommand = 0
 # ADDED CODE SECTRION ENDS HERE
@@ -853,11 +844,8 @@ class VirtualICC(object):
                     command = msg
                     processing = 1
                     newCommand = 1
-                    logging.info("Processing: %d\tnewCommand: %d\n", processing, newCommand)
                     while True:
                         if (processing == 0):
-                            logging.info("Response APDU (%d Bytes):\n%s\n", len(response),
-                                         hexdump(response))
                             self.__sendToVPICC(response)
                             break
                 else:
