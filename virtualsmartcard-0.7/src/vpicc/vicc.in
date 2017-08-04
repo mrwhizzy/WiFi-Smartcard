@@ -1,0 +1,143 @@
+#! @PYTHON@
+#
+# Copyright (C) 2010-2012 Frank Morgner <morgner@informatik.hu-berlin.de>
+# Copyright (C) 2010 Dominik Oepen <oepen@informatik.hu-berlin.de>
+# 
+# This file is part of virtualsmartcard.
+# 
+# virtualsmartcard is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option) any
+# later version.
+# 
+# virtualsmartcard is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# virtualsmartcard.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import argparse, logging
+
+
+parser = argparse.ArgumentParser(
+        description='''
+@PACKAGE_NAME@ @PACKAGE_VERSION@: @PACKAGE_SUMMARY@.
+
+The emulator connects to the virtual smart card reader reader (vpcd). Smart
+card applications can access the @PACKAGE_NAME@ through the vpcd via PC/SC.
+''',
+        epilog='''
+Report bugs to @PACKAGE_BUGREPORT@
+''')
+
+parser.add_argument("-t", "--type",
+        action="store",
+        choices=['iso7816', 'cryptoflex', 'ePass', 'nPA', 'relay', 'handler_test'],
+        default='iso7816',
+        help="type of smart card to emulate (default: %(default)s)")
+parser.add_argument("-v", "--verbose",
+        action="count",
+        help="Use (several times) to be more verbose")
+parser.add_argument("-f", "--file",
+        action="store",
+        type=argparse.FileType('r'),
+        help="load a saved smart card image")
+parser.add_argument("-H", "--hostname",
+        action="store",
+        type=str,
+        default='localhost',
+        help="specifiy vpcd's host name if vicc shall connect to it. (default: %(default)s)")
+parser.add_argument("-P", "--port",
+        action="store",
+        type=int,
+        default=35963,
+        help="port of connection establishment (default: %(default)s)")
+parser.add_argument("-R", "--reversed",
+        action="store_true",
+        help="use reversed connection mode. vicc will wait for an incoming connection from vpcd. (default: %(default)s)")
+parser.add_argument('--version', action='version', version='%(prog)s @PACKAGE_VERSION@')
+
+relay = parser.add_argument_group('Relaying a local smart card (`--type=relay`)')
+relay.add_argument("--reader",
+        action="store",
+        type=int,
+        default=0,
+        help="number of the reader containing the card to be relayed (default: %(default)s)")
+
+npa = parser.add_argument_group('Emulation of German identity card (`--type=nPA`)')
+npa.add_argument("--ef-cardaccess",
+        action="store",
+        type=argparse.FileType('rb'),
+        help="the card's EF.CardAccess (default: use file from first generation nPA)")
+npa.add_argument("--ef-cardsecurity",
+        action="store",
+        type=argparse.FileType('rb'),
+        help="the card's EF.CardSecurity (default: use file from first generation nPA)")
+npa.add_argument("--cvca",
+        action="store",
+        type=argparse.FileType('rb'),
+        help="trust anchor for verifying certificates in TA (default: use libeac's trusted certificates)")
+npa.add_argument("--disable-ta-checks",
+        action="store_true", default=False,
+        help="disable checking the validity period of CV certifcates (default: %(default)s)")
+npa.add_argument("--ca-key",
+        action="store",
+        type=argparse.FileType('rb'),
+        help="the chip's private key for CA (default: randomly generated, invalidates signature of EF.CardSecurity)")
+npa.add_argument("-d", "--datasetfile",
+        action="store",
+        help="Load the smartcard's data groups (DGs) from the specified dataset file. For DGs not in dataset file default values are used. \
+The data groups in the data set file must have the following syntax: \
+--------------------------------------------------- Datagroupname=Datagroupvalue \
+--------------------------------------------------- \
+For Example: GivenNames=GERTRUD. \
+The following Dataset Elements may be used in the dataset file: \
+DocumentType, IssuingState, DateOfExpiry, GivenNames, FamilyNames, ReligiousArtisticName, AcademicTitle, DateOfBirth, PlaceOfBirth, Nationality, Sex, BirthName, Country, City, ZIP, Street, CommunityID, ResidencePermit1, ResidencePermit2, dg12, dg14, dg15, dg16, dg21.\
+")
+
+
+args = parser.parse_args()
+
+from virtualsmartcard.VirtualSmartcard import VirtualICC
+
+ef_cardsecurity_data = None
+ef_cardaccess_data = None
+ca_key_data = None
+cvca = None
+if (args.ef_cardsecurity):
+    ef_cardsecurity_data = args.ef_cardsecurity.read()
+    args.ef_cardsecurity.close()
+if (args.ef_cardaccess):
+    ef_cardaccess_data = args.ef_cardaccess.read()
+    args.ef_cardaccess.close()
+if (args.ca_key):
+    ca_key_data = args.ca_key.read()
+    args.ca_key.close()
+if (args.cvca):
+    cvca = args.cvca.read()
+    args.cvca.close()
+
+if not args.verbose:
+    logginglevel = logging.CRITICAL
+elif args.verbose == 1:
+    logginglevel = logging.ERROR
+elif args.verbose == 2:
+    logginglevel = logging.WARNING
+elif args.verbose == 3:
+    logginglevel = logging.INFO
+else:
+    logginglevel = logging.DEBUG
+
+if args.reversed:
+    hostname = None
+else:
+    hostname = args.hostname
+
+vicc = VirtualICC(args.file, args.datasetfile, args.type,
+        hostname, args.port, readernum=args.reader,
+        ef_cardaccess=ef_cardaccess_data, ef_cardsecurity=ef_cardsecurity_data,
+        ca_key=ca_key_data, cvca=cvca, disable_checks=args.disable_ta_checks, logginglevel=logginglevel)
+vicc.run()
