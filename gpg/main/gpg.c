@@ -195,15 +195,14 @@ static void taskConnect(void *pvParameters) {
     // Wait for the callback to set the CONNECTED_BIT in the event group.
     xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
     ESP_LOGI(TAG, "Connected to AP");
+    printf("\nPress the proceed button to connect to: %s\n", IP[currNet]);
+    fflush(stdout);
+    while (proceed == 0) {
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+    proceed = 0;
 
     while(1) {
-        printf("\nPress the proceed button to connect to: %s\n", IP[currNet]);
-        fflush(stdout);
-        while (proceed == 0) {
-            vTaskDelay(1000/portTICK_PERIOD_MS);
-        }
-        proceed = 0;
-
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(PORT);
         serv_addr.sin_addr.s_addr = inet_addr(IP[currNet]);
