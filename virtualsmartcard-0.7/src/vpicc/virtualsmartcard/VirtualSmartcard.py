@@ -629,7 +629,7 @@ VPCD_CTRL_RESET = 2
 VPCD_CTRL_ATR	= 4
 
 
-# ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+# ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
 newCommand = 0
 processing = 0
 command = ''
@@ -651,7 +651,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
         response = self.request.recv(257).strip()
         processing = 0
         newCommand = 0
-# ADDED CODE SECTRION ENDS HERE
+# ADDED CODE SECTION ENDS HERE
 
 
 class VirtualICC(object): 
@@ -664,7 +664,7 @@ class VirtualICC(object):
     the vpcd, which forwards it to the application.
     """ 
     
-    def __init__(self, filename, datasetfile, card_type, host, port, readernum=None, ef_cardsecurity=None, ef_cardaccess=None, ca_key=None, cvca=None, disable_checks=False, logginglevel=logging.INFO):
+    def __init__(self, mode, filename, datasetfile, card_type, host, port, readernum=None, ef_cardsecurity=None, ef_cardaccess=None, ca_key=None, cvca=None, disable_checks=False, logginglevel=logging.INFO):
         from os.path import exists
 
         logging.basicConfig(level = logginglevel, 
@@ -737,12 +737,13 @@ class VirtualICC(object):
 
         logging.info("Connected to virtual PCD at %s:%u", host, port)
 
-        # ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
-        SocketServer.TCPServer.allow_reuse_address = True
-        server = SocketServer.TCPServer(('10.42.0.1', 5511), handleConnection)
-        srvThrd = threading.Thread(target=server.serve_forever)
-        srvThrd.daemon = True
-        srvThrd.start()
+        # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+        if (mode == "esp"):
+            SocketServer.TCPServer.allow_reuse_address = True
+            server = SocketServer.TCPServer(('10.42.0.1', 5511), handleConnection)
+            srvThrd = threading.Thread(target=server.serve_forever)
+            srvThrd.daemon = True
+            srvThrd.start()
         # ADDED CODE SECTION ENDS HERE
 
         signal.signal(signal.SIGINT, self.signalHandler)
@@ -796,7 +797,7 @@ class VirtualICC(object):
 
         return size, msg
 
-    def run(self):
+    def run(self, mode):
         """
         Main loop of the vpicc. Receives command APDUs via a socket from the
         vpcd, dispatches them to the emulated smartcard and sends the resulting
@@ -834,8 +835,8 @@ class VirtualICC(object):
                     logging.warning("Expected %u bytes, but received only %u",
                                     size, len(msg))
 
-                # ADDED CODE SECTRION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
-                if (True): # (mode == ESP):
+                # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+                if (mode == "esp"):
                     global newCommand
                     global processing
                     global command
