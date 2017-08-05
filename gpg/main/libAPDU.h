@@ -381,19 +381,19 @@ uint8_t restoreState() {
     ERRORCHK(restoreVar("pw1_limit", &pw1.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_length", &pw1_length, 0, 8), return 1);
     ERRORCHK(restoreBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
-    ERRORCHK(restoreVar("pw1_validated", &pw1.validated, 0, 8), return 1);
+    //ERRORCHK(restoreVar("pw1_validated", &pw1.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_remaining", &pw1.remaining, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_status", &pw1_status, 0, 8), return 1);
 
     ERRORCHK(restoreVar("rc_limit", &rc.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("rc_length", &rc_length, 0, 8), return 1);
-    ERRORCHK(restoreVar("rc_validated", &rc.validated, 0, 8), return 1);
+    //ERRORCHK(restoreVar("rc_validated", &rc.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("rc_remaining", &rc.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("pw3_limit", &pw3.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_length", &pw3_length, 0, 8), return 1);
     ERRORCHK(restoreBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
-    ERRORCHK(restoreVar("pw3_validated", &pw3.validated, 0, 8), return 1);
+    //ERRORCHK(restoreVar("pw3_validated", &pw3.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_remaining", &pw3.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
@@ -456,19 +456,19 @@ uint8_t restoreState() {
 }
 
 uint8_t updatePINattr() {
-    ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
+    //ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw1_remaining", pw1.remaining, 0, 8), return 1);
     ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
 
-    ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
+    //ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
     ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
     ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, rc_length+1), return 1);
 
-    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
-    ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
+    //ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw3_remaining", pw3.remaining, 0, 8), return 1);
+    ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
     return 0;
 }
@@ -2176,6 +2176,12 @@ uint8_t initialize() {
     return 0;
 }
 
+void invalidate() {     // Invalidate the PINs
+    pw1.validated = 0;
+    rc.validated = 0;
+    pw3.validated = 0;
+}
+
 void process(apdu_t apdu, outData* output) {
     static const char* TAG = "process";
     uint16_t status = SW_NO_ERROR;
@@ -2188,6 +2194,11 @@ void process(apdu_t apdu, outData* output) {
         pw1_modes[PW1_MODE_NO82] = 0;
         ERRORCHK(storeVar("PW1_MODE_NO82", pw1_modes[PW1_MODE_NO82], 0, 8), return);
         sendBuffer(apdu, 0, output);
+        return;
+    }
+
+    if (apdu.INS == 0x55) {     // Custom command INS to invalidate/PIN reset
+        invalidate();
         return;
     }
 

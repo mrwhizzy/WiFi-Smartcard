@@ -123,11 +123,14 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
         connected = 1;
+        invalidate();                   // Invalidate / PIN Reset at a new WiFi connection
         gpio_set_level(GPIO_NUM_26, 1); // Connected to a network, light up the LED
+        ESP_LOGI(TAG, "Connected to AP");
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         connected = 0;
+        invalidate();                   // Invalidate / PIN Reset at a WiFi disconnect
         gpio_set_level(GPIO_NUM_26, 0); // Disconnected, turn of the LED
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         currNet = nextNet;      // Select the next network in the list and try to connect
@@ -206,7 +209,6 @@ static void taskConnect(void *pvParameters) {
 begin:
         // Wait for the callback to set the CONNECTED_BIT in the event group.
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
-        ESP_LOGI(TAG, "Connected to AP");
 
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(PORT);
@@ -220,10 +222,11 @@ begin:
         ESP_LOGI(TAG, "... allocated socket");
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
+            invalidate();   // Invalidate / PIN Reset at a possible end of a connection
             ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
             ESP_LOGI(TAG, "Check that the server is running on the other end");
             close(sockfd);
-            vTaskDelay(10000/portTICK_PERIOD_MS);
+            vTaskDelay(5000/portTICK_PERIOD_MS);
             ESP_LOGI(TAG, "Trying again ...\n");
             goto begin;
         }
@@ -234,6 +237,7 @@ begin:
         comAPDU = parseAPDU(recvBuf, r);                // Parse the APDE command
 
         if (comAPDU.INS == 0x00) {      // Nothing more to receive
+            invalidate();   // Invalidate / PIN Reset at a possible end of a connection
             close(sockfd);
             goto begin;
         }
