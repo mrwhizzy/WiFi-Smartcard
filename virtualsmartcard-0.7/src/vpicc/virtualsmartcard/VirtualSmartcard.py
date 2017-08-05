@@ -825,6 +825,20 @@ class VirtualICC(object):
                     self.os.powerUp()
                 elif msg == chr(VPCD_CTRL_RESET):
                     logging.info("Reset")
+                    # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+                    if (mode == "esp"):
+                        global newCommand
+                        global processing
+                        global command
+                        global response
+
+                        command = '\x00\x55\x00\x00\x00'    # Custom command INS to reset
+                        processing = 1
+                        newCommand = 1
+                        while True:
+                            if (processing == 0):
+                                break
+                    # ADDED CODE SECTION ENDS HERE
                     self.os.reset()
                 elif msg == chr(VPCD_CTRL_ATR):
                     self.__sendToVPICC(self.os.getATR())
