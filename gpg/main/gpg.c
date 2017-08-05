@@ -81,7 +81,7 @@ void unmountFS() {
 }
 
 void initGPIO() {
-    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // Wi-Fi status LED
+    gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // WiFi status LED
     gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);      // Processing status LED
 
     gpio_set_direction(GPIO_NUM_16, GPIO_MODE_INPUT);       // Proceed button
@@ -115,25 +115,25 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
 
     switch(event->event_id) {
     case SYSTEM_EVENT_STA_START:
-        currNet = nextNet;
+        currNet = nextNet;      // Select the next network in the list and try to connect
         ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[currNet]).sta.ssid);
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[currNet]));
-        nextNet = (nextNet + 1) % NUMOFNETS;
+        nextNet = (nextNet + 1) % NUMOFNETS;    // Prepare the next network to select
         ESP_ERROR_CHECK(esp_wifi_connect());
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
         connected = 1;
-        gpio_set_level(GPIO_NUM_26, 1);         // Connected to a network
+        gpio_set_level(GPIO_NUM_26, 1); // Connected to a network, light up the LED
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         connected = 0;
-        gpio_set_level(GPIO_NUM_26, 0);         // Disconnected
+        gpio_set_level(GPIO_NUM_26, 0); // Disconnected, turn of the LED
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-        currNet = nextNet;
+        currNet = nextNet;      // Select the next network in the list and try to connect
         ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[nextNet]).sta.ssid);
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
-        nextNet = (nextNet + 1) % NUMOFNETS;
+        nextNet = (nextNet + 1) % NUMOFNETS;    // Prepare the next network to select
         ESP_ERROR_CHECK(esp_wifi_connect());
         break;
     default:
@@ -142,7 +142,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
     return ESP_OK;
 }
 
-static void initWiFi(void) {    // Configure and initialize Wi-Fi
+static void initWiFi(void) {    // Configure and initialize WiFi
     nextNet = 0;        // Attempt to connect to this network next
 
     tcpip_adapter_init();   // Initialize the TCP/IP adapter
@@ -193,10 +193,6 @@ static void taskConnect(void *pvParameters) {
         gpio_set_level(GPIO_NUM_25, 0);     // Initialize/restore end
     }
 
-    // Wait for the callback to set the CONNECTED_BIT in the event group.
-    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "Connected to AP");
-
 #ifdef PROCEEDBTN
     printf("\nPress the proceed button to connect to: %s\n", IP[currNet]);
     fflush(stdout);
@@ -208,6 +204,10 @@ static void taskConnect(void *pvParameters) {
 
     while(1) {
 begin:
+        // Wait for the callback to set the CONNECTED_BIT in the event group.
+        xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
+        ESP_LOGI(TAG, "Connected to AP");
+
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(PORT);
         serv_addr.sin_addr.s_addr = inet_addr(IP[currNet]);
@@ -271,7 +271,7 @@ begin:
         close(sockfd);
     }
 
-exit:
+exit:   // Restart the system, in a controlled manner
         for (int countdown = 3; countdown > 0; countdown--) {
             ESP_LOGI(TAG, "Restart in: %d... ", countdown);
             vTaskDelay(1000/portTICK_PERIOD_MS);
@@ -297,7 +297,7 @@ static void checkReset(void *pvParameters) {
 }
 
 static void wifiStatus(void *pvParameters) {
-    uint8_t toggle = 0;     // Toggle for Wi-Fi status LED
+    uint8_t toggle = 0;     // Toggle for WiFi status LED
     while(1) {  // Flash while it is still looking for a known network
         if (connected == 0) {
             toggle ^= 1;    // Because using XOR to toggle 0 and 1 is cool
@@ -308,12 +308,12 @@ static void wifiStatus(void *pvParameters) {
 }
 
 void app_main() {
-    initGPIO();
-    initNVS();
-    if (!mountFS()) {
+    initGPIO();     // Initialize the Input/Output pins
+    initNVS();      // Initialize the Non-Volatile Storage
+    if (!mountFS()) {   // Mount the FileSystem
         exit(0);
     }
-    initWiFi();
+    initWiFi();     // Initialize the WiFi
     xTaskCreate(&taskConnect, "taskConnect", 8192, NULL, 5, NULL);
     xTaskCreate(&checkReset, "checkReset", 2048, NULL, 5, NULL);
     xTaskCreate(&wifiStatus, "wifiStatus", 512, NULL, 5, NULL);
