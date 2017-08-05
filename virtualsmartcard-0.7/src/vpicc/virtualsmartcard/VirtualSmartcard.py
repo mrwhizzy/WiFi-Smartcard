@@ -24,8 +24,11 @@ from virtualsmartcard.utils import C_APDU, R_APDU, hexdump, inttostring
 from virtualsmartcard.CardGenerator import CardGenerator
 
 import socket, struct, sys, signal, atexit, smartcard, logging
-import SocketServer, time, threading
 
+# ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+from socket import error as SocketError
+import SocketServer, time, threading
+# ADDED CODE SECTION ENDS HERE
 
 
 class SmartcardOS(object): 
@@ -647,8 +650,12 @@ class handleConnection(SocketServer.BaseRequestHandler):
                 processing = 1
                 break
 
-        self.request.sendall(command)
-        response = self.request.recv(257).strip()
+        try:
+            self.request.sendall(command)
+            response = self.request.recv(257).strip()
+        except SocketError:
+            pass
+
         processing = 0
         newCommand = 0
 # ADDED CODE SECTION ENDS HERE
