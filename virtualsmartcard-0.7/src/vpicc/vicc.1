@@ -5,8 +5,8 @@ vicc \- manual page for vicc 0.7
 .SH DESCRIPTION
 usage: vicc [\-h] [\-t {iso7816,cryptoflex,ePass,nPA,relay,handler_test}] [\-v]
 .IP
-[\-E] [\-f FILE] [\-H HOSTNAME] [\-P PORT] [\-R] [\-\-version]
-[\-\-reader READER] [\-\-ef\-cardaccess EF_CARDACCESS]
+[\-E] [\-L LOCALIP] [\-f FILE] [\-H HOSTNAME] [\-P PORT] [\-R]
+[\-\-version] [\-\-reader READER] [\-\-ef\-cardaccess EF_CARDACCESS]
 [\-\-ef\-cardsecurity EF_CARDSECURITY] [\-\-cvca CVCA]
 [\-\-disable\-ta\-checks] [\-\-ca\-key CA_KEY] [\-d DATASETFILE]
 .PP
@@ -27,6 +27,10 @@ Use (several times) to be more verbose
 \fB\-E\fR, \fB\-\-esp32\fR
 use the ESP32 over WiFi as a virtual smartcard
 (default: False)
+.TP
+\fB\-L\fR LOCALIP, \fB\-\-localIP\fR LOCALIP
+specifiy the local IP of this machine (for when using
+the ESP32 over WiFi, default: 10.42.0.1)
 .TP
 \fB\-f\fR FILE, \fB\-\-file\fR FILE
 load a saved smart card image

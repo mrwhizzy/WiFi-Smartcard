@@ -664,7 +664,7 @@ class VirtualICC(object):
     the vpcd, which forwards it to the application.
     """ 
     
-    def __init__(self, mode, filename, datasetfile, card_type, host, port, readernum=None, ef_cardsecurity=None, ef_cardaccess=None, ca_key=None, cvca=None, disable_checks=False, logginglevel=logging.INFO):
+    def __init__(self, mode, localIP, filename, datasetfile, card_type, host, port, readernum=None, ef_cardsecurity=None, ef_cardaccess=None, ca_key=None, cvca=None, disable_checks=False, logginglevel=logging.INFO):
         from os.path import exists
 
         logging.basicConfig(level = logginglevel, 
@@ -740,7 +740,7 @@ class VirtualICC(object):
         # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
         if (mode == "esp"):
             SocketServer.TCPServer.allow_reuse_address = True
-            server = SocketServer.TCPServer(('10.42.0.1', 5511), handleConnection)
+            server = SocketServer.TCPServer((localIP, 5511), handleConnection)
             srvThrd = threading.Thread(target=server.serve_forever)
             srvThrd.daemon = True
             srvThrd.start()

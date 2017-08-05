@@ -45,6 +45,11 @@ parser.add_argument("-v", "--verbose",
 parser.add_argument("-E", "--esp32",
         action="store_true",
         help="use the ESP32 over WiFi as a virtual smartcard (default: %(default)s)")
+parser.add_argument("-L", "--localIP",
+        action="store",
+        type=str,
+        default='10.42.0.1',
+        help="specifiy the local IP of this machine (for when using the ESP32 over WiFi, default: %(default)s)")
 # ADDED CODE SECTION ENDS HERE
 parser.add_argument("-f", "--file",
         action="store",
@@ -148,7 +153,7 @@ if args.reversed:
 else:
     hostname = args.hostname
 
-vicc = VirtualICC(modeSel, args.file, args.datasetfile, args.type,
+vicc = VirtualICC(modeSel, args.localIP, args.file, args.datasetfile, args.type,
         hostname, args.port, readernum=args.reader,
         ef_cardaccess=ef_cardaccess_data, ef_cardsecurity=ef_cardsecurity_data,
         ca_key=ca_key_data, cvca=cvca, disable_checks=args.disable_ta_checks, logginglevel=logginglevel)
