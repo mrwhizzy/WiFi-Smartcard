@@ -654,7 +654,7 @@ class handleConnection(SocketServer.BaseRequestHandler):
             self.request.sendall(command)
             response = self.request.recv(257).strip()
         except SocketError:
-            pass
+            logging.info("Exception caught")
 
         processing = 0
         newCommand = 0
@@ -862,6 +862,7 @@ class VirtualICC(object):
                     global processing
                     global command
                     global response
+                    global err
 
                     command = msg
                     processing = 1
