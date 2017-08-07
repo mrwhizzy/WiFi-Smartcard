@@ -153,8 +153,8 @@ if args.reversed:
 else:
     hostname = args.hostname
 
-vicc = VirtualICC(modeSel, args.localIP, args.file, args.datasetfile, args.type,
-        hostname, args.port, readernum=args.reader,
+vicc = VirtualICC(args.file, args.datasetfile, args.type,
+        hostname, args.port, modeSel, args.localIP, readernum=args.reader,
         ef_cardaccess=ef_cardaccess_data, ef_cardsecurity=ef_cardsecurity_data,
         ca_key=ca_key_data, cvca=cvca, disable_checks=args.disable_ta_checks, logginglevel=logginglevel)
 vicc.run(modeSel)
