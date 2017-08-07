@@ -644,29 +644,21 @@ class handleConnection(SocketServer.BaseRequestHandler):
         global err          # Flag for the run function that an error happened
         response = ""
 
-        logging.warning("Maybe I wait forever??1")
         with condCommand:
-            logging.warning("Maybe I wait forever??2")
             while (newCommand == 0):
                 condCommand.wait()
 
-        logging.warning("Maybe I wait forever??3")
         with condResponse:
-            logging.warning("Maybe I wait forever??4")
             processing = 1      # Set the processing flag
             try:
                 self.request.sendall(command)   # Send the command APDU to the ESP32
                 response = self.request.recv(257).strip()   # Get the response APDU
             except SocketError:     # ESP32 probably disconnected
-                logging.warning("ERROR PASSING BY")
                 err = 1             # Set the error flag
 
-            logging.warning("Maybe I wait forever??5")
             processing = 0          # Processing finished, got the response
             newCommand = 0          # Reset the newCommand flag
             condResponse.notify()
-            logging.warning("Maybe I wait forever??6")
-        logging.warning("Maybe I wait forever??7")
 # ADDED CODE SECTION ENDS HERE
 
 
@@ -860,22 +852,15 @@ class VirtualICC(object):
                     logging.info("Reset")
                     # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
                     if (mode == "esp"):
-                        logging.warning("Do I wait forever??6")
                         with condCommand:
-                            logging.warning("Do I wait forever??7")
                             command = '\x00\x55\x00\x00\x00'    # Custom command INS to reset
                             newCommand = 1
                             processing = 1
                             condCommand.notify()
 
-                        logging.warning("Do I wait forever??8")
                         with condResponse:
-                            logging.warning("Do I wait forever??9")
                             while (processing == 1):
                                 condResponse.wait()
-                            logging.warning("Do I wait forever??10")
-
-                        logging.warning("Do I wait forever??11")
                     # ADDED CODE SECTION ENDS HERE
                     self.os.reset()
                 elif msg == chr(VPCD_CTRL_ATR):
@@ -889,27 +874,20 @@ class VirtualICC(object):
 
                 # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
                 if (mode == "esp"):
-                    logging.warning("Do I wait forever??1")
                     with condCommand:
                         command = msg
                         newCommand = 1
-                        logging.warning("Do I wait forever??2")
                         processing = 1
                         condCommand.notify()
 
-                    logging.warning("Do I wait forever??3")
                     with condResponse:
                         while (processing == 1):
-                            logging.warning("Do I wait forever??4")
                             condResponse.wait()
 
-                        logging.warning("Do I wait forever??5")
                         if (err == 0):
                             self.__sendToVPICC(response)
                         else:               # ESP32 was probably disconnected
-                            logging.warning("Do I even terminate?")
                             sys.exit()      # Terminate execution
-                            logging.warning("Do I????")
                 else:
                 # ADDED CODE SECTION ENDS HERE
                     answer = self.os.execute(msg)
