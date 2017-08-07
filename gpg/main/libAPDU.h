@@ -1,10 +1,26 @@
-/**
+/*
+ * This is a C implementation of the OpenPGPApplet.java by
+ * Yubico, which is modified in order to be adapted to the
+ * specifications of the ESP32.
  *
- * Contains functions and more
- * C implementation of OpenPGPApplet.java
+ * Extra functionality has been added, such as saving and
+ * restoring the state of the system, by saving all of the
+ * data in the flash memory of the device.
+ *
+ * All java classes that were used in the original impleme-
+ * ntation have been replaced by equivalent code, according
+ * to the capabilities and the limitations of the ESP32.
+ *
+ * Comment descriptions of some of the functions have been
+ * kept as they were from the original java implementation.
+ *
+ * Handles:
+ *    Saving and restoring the state of the system
+ *    Parsing command APDUs
+ *    All of the required OpenPGP functionality to operate
+ *
  *
  */
-
 #ifndef __LIBAPDU_H__
 #define __LIBAPDU_H__
 
@@ -50,7 +66,7 @@ static const uint8_t VERSION[3] = { 0x01, 0x00, 0x12 };
 #define SW_WARNING_STATE_UNCHANGED 0x6200
 #define SW_WRONG_LENGTH 0x6700
 #define SW_SECURITY_STATUS_NOT_SATISFIED 0x6982
-//#define SW_FILE_INVALID 0x6983    Openpgp defines 6983 as AUTHENTICATION BLOCKED
+//#define SW_FILE_INVALID 0x6983    OpenPGP defines 6983 as AUTHENTICATION BLOCKED
 #define SW_AUTHENTICATION_BLOCKED 0x6983
 #define SW_DATA_INVALID 0x6984
 #define SW_CONDITIONS_NOT_SATISFIED 0x6985
@@ -77,7 +93,7 @@ static const uint8_t EXTENDED_CAP[10] = { (uint8_t) 0xF8, 0x00, \
                     0x00, (uint8_t) 0xFF, 0x04, (uint8_t) 0xC0, \
                     0x00, (uint8_t) 0xFF, 0x00, (uint8_t) 0xFF };
 
-#define RESPONSE_MAX_LENGTH 255
+#define RESPONSE_MAX_LENGTH 255     // Max length of the response APDU
 #define CHALLENGES_MAX_LENGTH 255
 
 #define BUFFER_MAX_LENGTH 1221
@@ -89,46 +105,46 @@ static const uint8_t EXTENDED_CAP[10] = { (uint8_t) 0xF8, 0x00, \
 #define CERT_MAX_LENGTH 1216
 #define PRIVATE_DO_MAX_LENGTH 254
 
-#define FP_LENGTH 20
-#define PIN_LIMIT 3
+#define FP_LENGTH 20            // CA fingerprint size (20 bytes)
+#define PIN_LIMIT 3             // PIN retry limit
 
-#define PW1_MIN_LENGTH 6
-#define PW1_MAX_LENGTH 127
+#define PW1_MIN_LENGTH 6        // Minimum length of PW1
+#define PW1_MAX_LENGTH 127      // Maximum length of PW1
 // Default PW1 '123456'
 static uint8_t PW1_DEFAULT[6] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36 };
-#define PW1_MODE_NO81 0
-#define PW1_MODE_NO82 1
+#define PW1_MODE_NO81 0         // Mode 81 for PSO:CDS
+#define PW1_MODE_NO82 1         // For other operations
 
-#define RC_MIN_LENGTH 8
-#define RC_MAX_LENGTH 127
+#define RC_MIN_LENGTH 8         // Minimum length of the Resetting Code
+#define RC_MAX_LENGTH 127       // Maximum length of the Resetting Code
 
-#define PW3_MIN_LENGTH 8
-#define PW3_MAX_LENGTH 127
+#define PW3_MIN_LENGTH 8        // Minimum length of PW3 (Admin PIN)
+#define PW3_MAX_LENGTH 127      // Maximum length of PW3 (Admin PIN)
 // Default PW3 '12345678'
 static uint8_t PW3_DEFAULT[8] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38 };
 
-#define KEY_SIZE 2048
+#define KEY_SIZE 2048           // Supporting RSA 2048
 #define KEY_SIZE_BYTES 256
 #define EXPONENT_SIZE 17
 #define EXPONENT_SIZE_BYTES 3
-#define EXPONENT 65537
-#define FP_SIZE 20
+#define EXPONENT 65537          // The exponent
+#define FP_SIZE 20              // Key fingerprint size (20 bytes)
 
 uint8_t zero = 0;
 
 uint8_t loginData[LOGINDATA_MAX_LENGTH];
 uint16_t loginData_length;
 
-uint8_t url[URL_MAX_LENGTH];
+uint8_t url[URL_MAX_LENGTH];    // Public key URL
 uint16_t url_length;
 
-uint8_t name[NAME_MAX_LENGTH];
+uint8_t name[NAME_MAX_LENGTH];  // Cardholder's name
 uint16_t name_length;
 
-uint8_t lang[LANG_MAX_LENGTH];
+uint8_t lang[LANG_MAX_LENGTH];  // Language preferences
 uint16_t lang_length;
 
-uint8_t cert[CERT_MAX_LENGTH];
+uint8_t cert[CERT_MAX_LENGTH];  // Certificate
 uint16_t cert_length;
 
 uint8_t sex;
@@ -145,68 +161,68 @@ uint16_t private_use_do_3_length;
 uint8_t private_use_do_4[PRIVATE_DO_MAX_LENGTH];
 uint16_t private_use_do_4_length;
 
-typedef struct apdu_t {
-    uint8_t CLA;
-    uint8_t INS;
-    uint8_t P1;
-    uint8_t P2;
-    uint16_t P1P2;
-    uint16_t Le;        // Check for correct parsing
-    uint16_t Lc;        // Check for correct parsing
-    uint8_t data[256];
+typedef struct apdu_t { // Sturct that holds a command APDU
+    uint8_t CLA;        // Class
+    uint8_t INS;        // Instruction
+    uint8_t P1;         // Parameter 1
+    uint8_t P2;         // Parameter 2
+    uint16_t P1P2;      // Parameter 1 | Parameter 2
+    uint16_t Lc;        // Length of the data
+    uint16_t Le;        // Maximum number of response bytes expected
+    uint8_t data[256];  // The actual command data
 } apdu_t;
 
-typedef struct outData {
-    uint16_t length;
-    uint8_t data[RESPONSE_MAX_LENGTH+2];
+typedef struct outData {    // Data struct for the response APDU
+    uint16_t length;                        // Length of the response
+    uint8_t data[RESPONSE_MAX_LENGTH+2];    // The actual response
 } outData;
 
-typedef struct ownerPIN {
-    uint8_t remaining;
-    uint8_t limit;
+typedef struct ownerPIN {   // Equivalent struct to the java OwnerPIN
+    uint8_t remaining;      // PIN remaining tries
+    uint8_t limit;          // Maximum number of tries
     uint8_t value[PW1_MAX_LENGTH+1];    // PW1_MAX_LENGTH == PW3_MAX_LENGTH == RC_MAX_LENGTH
-    uint8_t validated;
+    uint8_t validated;      // Validated flag
 } ownerPIN;
 
-ownerPIN pw1;
+ownerPIN pw1;           // The PW1 PIN
 uint8_t pw1_length;
-uint8_t pw1_status;
+uint8_t pw1_status;     
 uint8_t pw1_modes[2];
 
-ownerPIN rc;
+ownerPIN rc;            // The Resetting Code
 uint8_t rc_length;
 
-ownerPIN pw3;
+ownerPIN pw3;           // The PW3 PIN (Admin PIN)
 uint8_t pw3_length;
 
-uint8_t ds_counter[3];
+uint8_t ds_counter[3];  // Digital Signature counter
 
-mbedtls_rsa_context sigKey, decKey, authKey;
-uint8_t isSigEmpty, isDecEmpty, isAuthEmpty;
-uint8_t sigAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
-uint8_t sigFP[FP_SIZE];
-uint8_t sigTime[4] = { 0x00, 0x00, 0x00, 0x00 };
-uint8_t decAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
-uint8_t decFP[FP_SIZE];
-uint8_t decTime[4] = { 0x00, 0x00, 0x00, 0x00 };
-uint8_t authAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };
-uint8_t authFP[FP_SIZE];
-uint8_t authTime[4] = { 0x00, 0x00, 0x00, 0x00 };
+mbedtls_rsa_context sigKey, decKey, authKey;    // The keys
+uint8_t isSigEmpty, isDecEmpty, isAuthEmpty;    // Flags to check if they are empty or not
+uint8_t sigAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };  // Signature key attributes
+uint8_t sigFP[FP_SIZE];                             // Signature key fingerprint
+uint8_t sigTime[4] = { 0x00, 0x00, 0x00, 0x00 };    // Signature key generation/import time
+uint8_t decAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };  // Decryption key attributes
+uint8_t decFP[FP_SIZE];                             // Decryption key fingerprint
+uint8_t decTime[4] = { 0x00, 0x00, 0x00, 0x00 };    // Decryption key generation/import time
+uint8_t authAttributes[6] = { 0x01, 0x00, 0x00, 0x00, 0x00, 0x03 };  // Authentication key attributes
+uint8_t authFP[FP_SIZE];                            // Authentication key fingerprint
+uint8_t authTime[4] = { 0x00, 0x00, 0x00, 0x00 };   // Authentication key generation/import time
 
-uint8_t ca1_fp[FP_LENGTH];
-uint8_t ca2_fp[FP_LENGTH];
-uint8_t ca3_fp[FP_LENGTH];
+uint8_t ca1_fp[FP_LENGTH];  // CA 1 fingerprint
+uint8_t ca2_fp[FP_LENGTH];  // CA 2 fingerprint
+uint8_t ca3_fp[FP_LENGTH];  // CA 3 fingerprint
 
 uint8_t buffer[BUFFER_MAX_LENGTH];
-uint16_t out_left = 0;
-uint16_t out_sent = 0;
-uint16_t in_received = 0;
+uint16_t out_left = 0;      // Counter for sending data in multiple response APDUs
+uint16_t out_sent = 0;      // How many data have already been sent
+uint16_t in_received = 0;   // Length of the data of command APDUs
 
-uint8_t chain = 0;      // false
-uint8_t chain_ins = 0;
-uint16_t chain_p1p2 = 0;
+uint8_t chain = 0;          // Flag used for command chaining
+uint8_t chain_ins = 0;      // Command chaining INS (for checking)
+uint16_t chain_p1p2 = 0;    // Command chaining P1P2 (for checking)
 
-uint8_t terminated = 0; // false
+uint8_t terminated = 0;     // Terminated flag, if = 1 the card is locked
 
 
 /**
@@ -227,20 +243,21 @@ apdu_t parseAPDU(char* recvBuf, int n){
     newAPDU.P1 = recvBuf[2];
     newAPDU.P2 = recvBuf[3];
     newAPDU.P1P2 = newAPDU.P1 << 8 | newAPDU.P2;
-    if (n == 5) {           // Le
+    if (n == 5) {     // Then we have: CLA | INS | P1 | P2 | Le
         newAPDU.Le = (uint16_t) (0xFF & recvBuf[4]);
     } else if (n > 5) {
         newAPDU.Lc = (uint16_t) (0xFF & recvBuf[4]);
-        if (n > 5 + newAPDU.Lc) {   // Lc | Data | Le
+        if (n > 5 + newAPDU.Lc) {   // CLA | INS | P1 | P2 | Lc | Data | Le
             newAPDU.Le = (uint16_t) (0xFF & recvBuf[5+newAPDU.Lc]);
             memcpy(newAPDU.data, (recvBuf+5), n-6);
-        } else {                // Lc | Data
+        } else {                    // CLA | INS | P1 | P2 | Lc | Data
             memcpy(newAPDU.data, (recvBuf+5), n-5);
         }
     }
     return newAPDU;
 }
 
+// Function to store the value of a variable to the Non-Volatile Storage
 uint16_t storeVar(char* key, uint8_t val8, uint16_t val16, uint8_t mode) {
     nvs_handle nvsHandle;
     if (nvs_open("storage", NVS_READWRITE, &nvsHandle) != ESP_OK) {
@@ -270,6 +287,7 @@ uint16_t storeVar(char* key, uint8_t val8, uint16_t val16, uint8_t mode) {
     }
 }
 
+// Function to store a byte array to the flash memory filesystem
 uint16_t storeBuf(char* key, uint8_t* ptr, uint16_t len) {
     FILE* fp = NULL;
     if ((fp = fopen(key, "wb")) == NULL) {
@@ -281,6 +299,7 @@ uint16_t storeBuf(char* key, uint8_t* ptr, uint16_t len) {
     return SW_NO_ERROR;
 }
 
+// Function to restore the value of a variable from the Non-Volatile Storage
 uint16_t restoreVar(char* key, uint8_t* val8, uint16_t* val16, uint8_t mode) {
     nvs_handle nvsHandle;
     if (nvs_open("storage", NVS_READWRITE, &nvsHandle) != ESP_OK) {
@@ -302,6 +321,7 @@ uint16_t restoreVar(char* key, uint8_t* val8, uint16_t* val16, uint8_t mode) {
     }
 }
 
+// Function to restore a byte array from the flash memory filesystem
 uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
     FILE* fp = NULL;
     if ((fp = fopen(key, "rb")) == NULL) {
@@ -312,7 +332,7 @@ uint16_t restoreBuf(char* key, uint8_t* ptr, uint16_t len){
     return SW_NO_ERROR;
 }
 
-// Function just to read and print the keys from the flash storage
+// Function to read and print the keys from the flash storage
 uint16_t readKey(uint8_t type) {
     static const char *TAG = "readKey";
     mbedtls_rsa_context* key;
@@ -650,8 +670,8 @@ uint16_t verify(uint8_t mode) {
 /**
  * Provide the CHANGE REFERENCE DATA command (INS 24)
  *
- * Change the password specified using mode: - 81: PW1 - 82: PW3*
- *                                  *probably means mode 83: PW3*
+ * Change the password specified using mode: - 81: PW1 - 83: PW3
+ *
  * @param apdu
  * @param mode
  *            Password to be changed

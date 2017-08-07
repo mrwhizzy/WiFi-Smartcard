@@ -1,5 +1,12 @@
 /* 
- * write some description, sometime
+ * The main file for the ESP32
+ * 
+ * Handles:
+ *    System initialization (storage)
+ *    Input interrupts and Output (Buttons and LEDs)
+ *    WiFi
+ *    Connection with another machine
+ *    Receiving APDU commands and writing APDU responses
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,8 +36,8 @@
 #include "libAPDU.h"
 
 #define PORT 5511       // The default port of this protocol
-#define PRINTAPDU       // If defined, APDU info is printed
-//#define PROCEEDBTN    // Do not connect until the proceed button is pressed
+#define PRINTAPDU       // If defined, APDU info is printed, mainly used for debug reasons
+#define PROCEEDBTN      // Do not perform a security operation until the button is pressed
 
 // FreeRTOS event group to signal when we are connected & ready to make a request
 static EventGroupHandle_t wifi_event_group;
@@ -46,7 +53,7 @@ static wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
 // Mount path for the partition
 const char *base_path = "/spiflash";
 
-uint8_t connected = 0;
+uint8_t connected = 0;  // Status bit for the WiFi
 uint8_t proceed = 0;    // When the proceed button is pressed, proceed is set
 uint8_t hardRst = 0;    // When the hard reset button is pressed, hardRst is set
 
@@ -58,7 +65,7 @@ void hardReset(void* arg) {         // Interrupt handler for the hard reset butt
     hardRst = 1;
 }
 
-uint8_t mountFS() {
+uint8_t mountFS() {     // Mount the filesystem at the beginning
     static const char *TAG = "mountFS";
     ESP_LOGI(TAG, "Mounting FAT filesystem");
     const esp_vfs_fat_mount_config_t mount_config = {   // Mount the filesystem
@@ -73,7 +80,7 @@ uint8_t mountFS() {
     return 1;
 }
 
-void unmountFS() {
+void unmountFS() {      // Unmount the filesystem before restarting
     static const char *TAG = "unmountFS";
     ESP_LOGI(TAG, "Unmounting FAT filesystem");
     ESP_ERROR_CHECK(esp_vfs_fat_spiflash_unmount(base_path, s_wl_handle));
@@ -84,11 +91,11 @@ void initGPIO() {
     gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);      // WiFi status LED
     gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);      // Processing status LED
 
-    gpio_set_direction(GPIO_NUM_16, GPIO_MODE_INPUT);       // Proceed button
-    gpio_set_intr_type(GPIO_NUM_16, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
-    gpio_set_pull_mode(GPIO_NUM_16, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
+    gpio_set_direction(GPIO_NUM_12, GPIO_MODE_INPUT);       // Proceed button
+    gpio_set_intr_type(GPIO_NUM_12, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
+    gpio_set_pull_mode(GPIO_NUM_12, GPIO_PULLDOWN_ONLY);    // Enable pull-down (spared a 10k resistor)
     gpio_install_isr_service(0);                            // Install GPIO interrupt service
-    gpio_isr_handler_add(GPIO_NUM_16, proceedHandle, (void*) GPIO_NUM_16);  // Hook ISR handler
+    gpio_isr_handler_add(GPIO_NUM_12, proceedHandle, (void*) GPIO_NUM_12);  // Hook ISR handler
 
     gpio_set_direction(GPIO_NUM_17, GPIO_MODE_INPUT);       // Re-initialize button
     gpio_set_intr_type(GPIO_NUM_17, GPIO_INTR_POSEDGE);     // Interrupt on rising edge
@@ -196,24 +203,15 @@ static void taskConnect(void *pvParameters) {
         gpio_set_level(GPIO_NUM_25, 0);     // Initialize/restore end
     }
 
-#ifdef PROCEEDBTN
-    printf("\nPress the proceed button to connect to: %s\n", IP[currNet]);
-    fflush(stdout);
-    while (proceed == 0) {
-        vTaskDelay(1000/portTICK_PERIOD_MS);
-    }
-    proceed = 0;
-#endif
-
     while(1) {
 begin:
         // Wait for the callback to set the CONNECTED_BIT in the event group.
         xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
 
         serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(PORT);
-        serv_addr.sin_addr.s_addr = inet_addr(IP[currNet]);
-        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        serv_addr.sin_port = htons(PORT);           // Set the port of this protocol
+        serv_addr.sin_addr.s_addr = inet_addr(IP[currNet]); // The IP address of the other machine
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);   // Setup the socket
         if (sockfd < 0) {
             ESP_LOGE(TAG, "... Failed to allocate socket: %d", errno);
             vTaskDelay(1000/portTICK_PERIOD_MS);
@@ -222,27 +220,27 @@ begin:
         ESP_LOGI(TAG, "... allocated socket");
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
-            invalidate();   // Invalidate / PIN Reset at a possible end of a connection
             ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
             ESP_LOGI(TAG, "Check that the server is running on the other end");
-            close(sockfd);
-            vTaskDelay(5000/portTICK_PERIOD_MS);
-            ESP_LOGI(TAG, "Trying again ...\n");
+            invalidate();   // Invalidate / PIN Reset at a possible end of a connection
+            close(sockfd);  // The connection may have failed because there is no server running
+            vTaskDelay(5000/portTICK_PERIOD_MS);    // So wait a few seconds
+            ESP_LOGI(TAG, "Trying again ...\n");    // And try to connect again
             goto begin;
         }
         ESP_LOGI(TAG, "... connected\n");
 
         bzero(recvBuf, sizeof(recvBuf));                // Zero the receive buffer
         r = read(sockfd, recvBuf, sizeof(recvBuf)-1);   // Receive the APDU command
-        comAPDU = parseAPDU(recvBuf, r);                // Parse the APDE command
+        comAPDU = parseAPDU(recvBuf, r);                // Parse the APDU command
 
         if (comAPDU.INS == 0x00) {      // Nothing more to receive
             invalidate();   // Invalidate / PIN Reset at a possible end of a connection
-            close(sockfd);
+            close(sockfd); 
             goto begin;
         }
 
-#ifdef PRINTAPDU
+#ifdef PRINTAPDU    // Print the parsed command APDU
         printf("CLA: %02X\tINS: %02X\tP1: %02X\t", comAPDU.CLA, comAPDU.INS, comAPDU.P1);
         printf("P2: %02X\tP1P2: %02X\tLc: %02X\tData: ", comAPDU.P2, comAPDU.P1P2, comAPDU.Lc);
         const uint8_t* tmp = comAPDU.data;
@@ -252,11 +250,35 @@ begin:
         fflush(stdout);
 #endif
 
+#ifdef PROCEEDBTN   // The button has to be pressed before performing a security operation
+        if (comAPDU.INS == 0x88 || comAPDU.INS == 0x2A) {
+            proceed = 0;    // Set the flag to 0
+            int time = 0;   // Simple time counter
+
+            while (proceed == 0 && time < 30) { // Wait until the button is pressed or time runs out
+                gpio_set_level(GPIO_NUM_25, 1);     // Flash the LEDs to notify the user
+                gpio_set_level(GPIO_NUM_26, 1);     // Flash the LEDs to notify the user
+                vTaskDelay(250/portTICK_PERIOD_MS); // Wait for 250ms
+                gpio_set_level(GPIO_NUM_25, 0);     // Flash the LEDs to notify the user
+                gpio_set_level(GPIO_NUM_26, 0);     // Flash the LEDs to notify the user
+                vTaskDelay(250/portTICK_PERIOD_MS); // Wait for another 250ms
+                time++;     // 2 * 250ms * 30 = 15 seconds
+            }
+            gpio_set_level(GPIO_NUM_26, 1);         // Turn the WiFi status LED back on
+            if (time == 30) {           // If time == 30 it means that the time ran out
+                output.data[0] = 0x69;  // Set the output to SW_AUTHENTICATION_BLOCKED
+                output.data[1]= 0x83;   // SW_AUTHENTICATION_BLOCKED = 0x6983
+                output.length = 2;      // Set the length of the output to 2 bytes
+                goto writeOutput;       // And bypass the processing of this APDU command
+            }
+        }
+#endif
+
         gpio_set_level(GPIO_NUM_25, 1);     // Start processing a command
         process(comAPDU, &output);          // Perform the appropriate operation
         gpio_set_level(GPIO_NUM_25, 0);     // End of command processing
 
-#ifdef PRINTAPDU
+#ifdef PRINTAPDU    // Print the response APDU and it's length
         printf("Output Data: ");
         const uint8_t* tmp2 = output.data;
         while(*tmp2)
@@ -265,7 +287,11 @@ begin:
         fflush(stdout);
 #endif
 
-        if (write(sockfd, output.data, output.length) < 0) {    // Send the response
+#ifdef PROCEEDBTN
+writeOutput:    // Label to jump if pressing the button is required and it didn't happen
+#endif
+
+        if (write(sockfd, output.data, output.length) < 0) {    // Write the response
             ESP_LOGE(TAG, "... socket send failed");
             vTaskDelay(1000/portTICK_PERIOD_MS);
             close(sockfd);
@@ -276,23 +302,23 @@ begin:
     }
 
 exit:   // Restart the system, in a controlled manner
-        for (int countdown = 3; countdown > 0; countdown--) {
-            ESP_LOGI(TAG, "Restart in: %d... ", countdown);
-            vTaskDelay(1000/portTICK_PERIOD_MS);
-        }
-        ESP_LOGI(TAG, "Starting again");
-        unmountFS();
-        esp_restart();
+    for (int countdown = 3; countdown > 0; countdown--) {
+        ESP_LOGI(TAG, "Restart in: %d... ", countdown);
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+    ESP_LOGI(TAG, "Starting again");
+    unmountFS();
+    esp_restart();
 }
 
 static void checkReset(void *pvParameters) {
-    while(1) {      // Check if reset button is pressed periodically by polling
+    while(1) {      // Check periodically (by polling) if reset button has been pressed
         if (hardRst == 1) {     // If it was pressed, erase "initialized" from NVS
             nvs_handle nvsHandle;
             if (nvs_open("storage", NVS_READWRITE, &nvsHandle) == ESP_OK) {
                 if (nvs_erase_key(nvsHandle, "initialized") == ESP_OK) {
-                    unmountFS();
-                    esp_restart();
+                    unmountFS();    // This will result in a re-initialization
+                    esp_restart();  // When the ESP32 restarts
                 }
             }
         }
