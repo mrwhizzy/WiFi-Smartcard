@@ -28,7 +28,6 @@ DESCRIPTION
     * Supports changeReferenceData
     * Supports getChallenge
     * Supports setPinRetries
-
 """
 import sys
 import time
