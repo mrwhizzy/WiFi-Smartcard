@@ -625,7 +625,6 @@ _Csizeof_short = len(struct.pack('h', 0))
 
 
 VPCD_CTRL_LEN   = 1
-
 VPCD_CTRL_OFF   = 0
 VPCD_CTRL_ON    = 1
 VPCD_CTRL_RESET = 2
@@ -642,14 +641,12 @@ class handleConnection(SocketServer.BaseRequestHandler):
         global newCommand   # Flag for the handler that there is a new command
         global processing   # Flag for the run function that the processing has finished
         global err          # Flag for the run function that an error happened
-        response = ""
 
         with condCommand:
             while (newCommand == 0):
                 condCommand.wait()
 
         with condResponse:
-            processing = 1      # Set the processing flag
             try:
                 self.request.sendall(command)   # Send the command APDU to the ESP32
                 response = self.request.recv(257).strip()   # Get the response APDU
@@ -823,9 +820,6 @@ class VirtualICC(object):
         global err          # Flag for the run function that an error happened
         condCommand = threading.Condition()
         condResponse = threading.Condition()
-        newCommand = 0
-        command = ""
-        err = 0
         # ADDED CODE SECTION ENDS HERE
 
         while True :
@@ -839,6 +833,13 @@ class VirtualICC(object):
                 else:
                     sys.exit()
 
+            # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
+            newCommand = 0
+            processing = 0
+            command = ""
+            response = ""
+            err = 0
+            # ADDED CODE SECTION ENDS HERE
             if not size:
                 logging.warning("Error in communication protocol (missing size parameter)")
             elif size == VPCD_CTRL_LEN:
@@ -872,6 +873,7 @@ class VirtualICC(object):
                     logging.warning("Expected %u bytes, but received only %u",
                                     size, len(msg))
 
+
                 # ADDED CODE SECTION IN ORDER TO INTEGRATE ESP32 TO GNUPG STARTS HERE
                 if (mode == "esp"):
                     with condCommand:
@@ -882,7 +884,7 @@ class VirtualICC(object):
 
                     with condResponse:
                         while (processing == 1):
-                            condResponse.wait()
+                            condResponse.wait(0)
 
                         if (err == 0):
                             self.__sendToVPICC(response)
