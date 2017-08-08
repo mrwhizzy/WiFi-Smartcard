@@ -1,25 +1,25 @@
 /*
- * This is a C implementation of the OpenPGPApplet.java by
- * Yubico, which is modified in order to be adapted to the
- * specifications of the ESP32.
+ * C implementation of the OpenPGP card.
  *
- * Extra functionality has been added, such as saving and
- * restoring the state of the system, by saving all of the
- * data in the flash memory of the device.
+ * This code is based on the OpenPGPApplet.java by Yubico,
+ * however, it is heavily modified in order to be adapted
+ * to the specifications of the ESP32.
  *
  * All java classes that were used in the original impleme-
- * ntation have been replaced by equivalent code, according
- * to the capabilities and the limitations of the ESP32.
+ * ntation have been replaced with equivalent code, accord-
+ * ing to the capabilities and the limitations of the ESP32.
+ *
+ * Extra functionality has been added, such as saving and
+ * restoring the state of the device, by saving all of the
+ * data in the flash memory of the ESP32.
  *
  * Comment descriptions of some of the functions have been
  * kept as they were from the original java implementation.
  *
  * Handles:
  *    Saving and restoring the state of the system
- *    Parsing command APDUs
+ *    Parsing of command APDUs
  *    All of the required OpenPGP functionality to operate
- *
- *
  */
 #ifndef __LIBAPDU_H__
 #define __LIBAPDU_H__
@@ -339,19 +339,19 @@ uint16_t readKey(uint8_t type) {
     uint16_t ret;
     FILE *f;
 
-    if (type == (uint8_t) 0xB6) {
+    if (type == (uint8_t) 0xB6) {           // B6 = signature
         key = &sigKey;
         if ((f = fopen("/spiflash/sigKey.dat", "rb")) == NULL) {
             ret = SW_UNKNOWN;
             goto exitRK;
         }
-    } else if (type == (uint8_t) 0xB8) {
+    } else if (type == (uint8_t) 0xB8) {    // B8 = decryption
         key = &decKey;
         if ((f = fopen("/spiflash/decKey.dat", "rb")) == NULL) {
             ret = SW_UNKNOWN;
             goto exitRK;
         }
-    } else if (type == (uint8_t) 0xA4) {
+    } else if (type == (uint8_t) 0xA4) {    // A4 = authentication
         key = &authKey;
         if ((f = fopen("/spiflash/authKey.dat", "rb")) == NULL) {
             ret = SW_UNKNOWN;
@@ -379,7 +379,7 @@ uint16_t readKey(uint8_t type) {
 
     key->len = (mbedtls_mpi_bitlen(&key->N) + 7) >> 3;
 
-    if (mbedtls_rsa_check_privkey(key) != 0) {
+    if (mbedtls_rsa_check_privkey(key) != 0) {  // Check that the key is right
         ESP_LOGE(TAG, "Failed hard");
         ret = SW_UNKNOWN;
         goto exitRK;
@@ -390,6 +390,16 @@ exitRK:
     return ret;
 }
 
+/**
+ * This function is responsible for restoring the state of the
+ * ESP32 after a restart. It runs each time the ESP32 restarts,
+ * after the first initialization.
+ *
+ * Restores:
+ *    Variables (such as lengths, PIN remaining tries, etc)
+ *    Byte arrays (PINs, cardholder related data, etc)
+ *    Keys (Signature, Decryption, Authentication)
+ */
 uint8_t restoreState() {
     static const char* TAG = "restoreState";
     fflush(stdout);
@@ -401,19 +411,16 @@ uint8_t restoreState() {
     ERRORCHK(restoreVar("pw1_limit", &pw1.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_length", &pw1_length, 0, 8), return 1);
     ERRORCHK(restoreBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
-    //ERRORCHK(restoreVar("pw1_validated", &pw1.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_remaining", &pw1.remaining, 0, 8), return 1);
     ERRORCHK(restoreVar("pw1_status", &pw1_status, 0, 8), return 1);
 
     ERRORCHK(restoreVar("rc_limit", &rc.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("rc_length", &rc_length, 0, 8), return 1);
-    //ERRORCHK(restoreVar("rc_validated", &rc.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("rc_remaining", &rc.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("pw3_limit", &pw3.limit, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_length", &pw3_length, 0, 8), return 1);
     ERRORCHK(restoreBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
-    //ERRORCHK(restoreVar("pw3_validated", &pw3.validated, 0, 8), return 1);
     ERRORCHK(restoreVar("pw3_remaining", &pw3.remaining, 0, 8), return 1);
 
     ERRORCHK(restoreVar("isSigEmpty", &isSigEmpty, 0, 8), return 1);
@@ -475,18 +482,16 @@ uint8_t restoreState() {
     return 0;
 }
 
+// Update all of the PIN attributes in the memory
 uint8_t updatePINattr() {
-    //ERRORCHK(storeVar("pw1_validated", pw1.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw1_remaining", pw1.remaining, 0, 8), return 1);
     ERRORCHK(storeVar("pw1_length", pw1_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/pw1.dat", pw1.value, pw1_length+1), return 1);
 
-    //ERRORCHK(storeVar("rc_validated", rc.validated, 0, 8), return 1);
     ERRORCHK(storeVar("rc_remaining", rc.remaining, 0, 8), return 1);
     ERRORCHK(storeVar("rc_length", rc_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/rc.dat", rc.value, rc_length+1), return 1);
 
-    //ERRORCHK(storeVar("pw3_validated", pw3.validated, 0, 8), return 1);
     ERRORCHK(storeVar("pw3_remaining", pw3.remaining, 0, 8), return 1);
     ERRORCHK(storeVar("pw3_length", pw3_length, 0, 8), return 1);
     ERRORCHK(storeBuf("/spiflash/pw3.dat", pw3.value, pw3_length+1), return 1);
@@ -1652,7 +1657,6 @@ uint16_t putData(uint16_t tag) {
         if (in_received > PRIVATE_DO_MAX_LENGTH) {
             return SW_WRONG_LENGTH;
         }
-        //JCSystem.beginTransaction();
         memcpy(private_use_do_4, buffer, in_received);
         ERRORCHK(storeBuf("/spiflash/private_use_do_4.dat", private_use_do_4, in_received), return SW_UNKNOWN);
         private_use_do_4_length = in_received;
@@ -1988,7 +1992,6 @@ uint16_t setPinRetries(uint8_t pin_retries, uint8_t reset_retries, uint8_t admin
             return SW_UNKNOWN;
         }
     }
-    //JCSystem.requestObjectDeletion(); // Find out what this exactly does
     return SW_NO_ERROR;
 }
 
@@ -2333,7 +2336,6 @@ void process(apdu_t apdu, outData* output) {
                 initialize();
                 terminated = 0;
                 status = storeVar("terminated", terminated, 0, 8);
-                //JCSystem.requestObjectDeletion();     // Find out what this exactly does
             } else {
                 status = SW_CONDITIONS_NOT_SATISFIED;
             }

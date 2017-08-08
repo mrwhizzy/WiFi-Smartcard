@@ -4,7 +4,7 @@ serverPGP.py    22/07/2017
 AUTHOR
 
     Christos Melas
-    cxm661@cs.bham.ac.uk
+    chr.melas@gmail.com
 
 SYNOPSIS
 
@@ -13,21 +13,8 @@ SYNOPSIS
 DESCRIPTION
 
     This is a Python implementation of a server that
-    the ESP32 can connect to and exchange APDUs.
-
-    * Supports PIN verification
-    * Supports importing RSA-2048 keys from file
-    * Supports asymmetric key generation on the ESP32
-    * Supports putData fully
-    * Supports getData fully
-    * Supports resetRetryCounter
-    * Supports internalAuthentication
-    * Supports computeDigitalSignature
-    * Supports decipher
-    * Supports terminate/activate
-    * Supports changeReferenceData
-    * Supports getChallenge
-    * Supports setPinRetries
+    the ESP32 can connect to and perform all of its 
+    supported functions.
 """
 import sys
 import time

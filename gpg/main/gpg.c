@@ -39,12 +39,10 @@
 #define PRINTAPDU       // If defined, APDU info is printed, mainly used for debug reasons
 #define PROCEEDBTN      // Do not perform a security operation until the button is pressed
 
-// FreeRTOS event group to signal when we are connected & ready to make a request
-static EventGroupHandle_t wifi_event_group;
+// FreeRTOS event group to signal connected & ready to make a request
+static EventGroupHandle_t wifiEventGroup;
 
-/* The event group allows multiple bits for each event,
- * but we only care about one event - are we connected
- * to the AP with an IP? */
+// Flag that is set when connected to an AP with an IP
 const int CONNECTED_BIT = BIT0;
 
 // Handle of the wear levelling library instance
@@ -133,13 +131,13 @@ static esp_err_t event_handler(void *ctx, system_event_t *event) {
         invalidate();                   // Invalidate / PIN Reset at a new WiFi connection
         gpio_set_level(GPIO_NUM_26, 1); // Connected to a network, light up the LED
         ESP_LOGI(TAG, "Connected to AP");
-        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
+        xEventGroupSetBits(wifiEventGroup, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         connected = 0;
         invalidate();                   // Invalidate / PIN Reset at a WiFi disconnect
         gpio_set_level(GPIO_NUM_26, 0); // Disconnected, turn of the LED
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        xEventGroupClearBits(wifiEventGroup, CONNECTED_BIT);
         currNet = nextNet;      // Select the next network in the list and try to connect
         ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", (*wifiConfig[nextNet]).sta.ssid);
         ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifiConfig[nextNet]));
@@ -156,7 +154,7 @@ static void initWiFi(void) {    // Configure and initialize WiFi
     nextNet = 0;        // Attempt to connect to this network next
 
     tcpip_adapter_init();   // Initialize the TCP/IP adapter
-    wifi_event_group = xEventGroupCreate();
+    wifiEventGroup = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -206,7 +204,7 @@ static void taskConnect(void *pvParameters) {
     while(1) {
 begin:
         // Wait for the callback to set the CONNECTED_BIT in the event group.
-        xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
+        xEventGroupWaitBits(wifiEventGroup, CONNECTED_BIT, false, true, portMAX_DELAY);
 
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(PORT);           // Set the port of this protocol

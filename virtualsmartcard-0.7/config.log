@@ -582,7 +582,7 @@ configure: failed program was:
 configure:17688: result: no
 configure:17586: checking whether pthreads work without any flags
 configure:17679: gcc -o conftest -g -O2    conftest.c   >&5
-/tmp/ccTbo5ui.o: In function `main':
+/tmp/ccSBheGq.o: In function `main':
 /home/cmel/Project/virtualsmartcard-0.7/conftest.c:30: undefined reference to `pthread_create'
 /home/cmel/Project/virtualsmartcard-0.7/conftest.c:31: undefined reference to `pthread_join'
 /home/cmel/Project/virtualsmartcard-0.7/conftest.c:33: undefined reference to `__pthread_register_cancel'
