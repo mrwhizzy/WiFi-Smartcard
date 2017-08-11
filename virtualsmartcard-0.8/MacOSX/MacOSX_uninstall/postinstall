@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# get the Mac OS X major version. Example: El Capitan 10.11 -> 10011
+MAC_VERSION=$(sw_vers -productVersion | awk -F '.' '{print $1 * 1000 + $2}')
+
+if [ 10011 -gt $MAC_VERSION ]
+then
+	# Mac OS X < 10.11
+	DROPDIR="/usr/libexec/SmartCardServices/drivers"
+else
+	# Mac OS X >= 10.11 (El Capitan)
+	DROPDIR="/usr/local/libexec/SmartCardServices/drivers"
+fi
+
+if [ -L "$DROPDIR" ]
+then
+	if [ "$(readlink $DROPDIR)" == "/Library/VirtualSmartCard/usr/libexec/SmartCardServices/drivers/ifd-vpcd.bundle" ]
+	then
+		rm $DROPDIR
+	fi
+fi
+
+# Remove symlinks to commands
+for file in /Library/VirtualSmartCard/bin/*; do
+	test -L "/usr/local/bin/$(basename $file)" && rm -f "/usr/local/bin/$(basename $file)"
+done
+
+# Remove symlinks to files
+for file in /Library/VirtualSmartCard/lib/python2.7/site-packages/*
+do
+	test -L "/usr/local/lib/python2.7/site-packages/$(basename $file)" && rm -rf "/usr/local/lib/python2.7/site-packages/$(basename $file)"
+done
+
+# Remove installed files
+rm -rf /Library/VirtualSmartCard
+
+echo "Virtual Smart Card has been removed from your system. See you again!"

@@ -1,0 +1,19 @@
+import "wudfddi.idl";
+
+[
+    uuid(8B9C88E9-7E63-46c7-832B-D48D0290E4BF),
+    version(1.0),
+    helpstring("VirtualSCReader Driver Type Library")
+]
+library VirtualSCReaderDriverLib
+{
+    importlib("stdole2.tlb");
+    [
+        uuid(A44A2DF4-DCA4-4767-8EC4-86FE611C2EA7),
+        helpstring("VirtualSCReader Class")
+    ]
+    coclass VirtualSCReaderDriver
+    {
+        [default] interface IDriverEntry;
+    };
+};
