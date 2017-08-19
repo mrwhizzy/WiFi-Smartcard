@@ -249,7 +249,7 @@ begin:
 #endif
 
 #ifdef PROCEEDBTN   // The button has to be pressed before performing a security operation
-        if (comAPDU.INS == 0x88 || comAPDU.INS == 0x2A) {
+        if ((comAPDU.CLA != 0x10) & (comAPDU.INS == 0x88 || comAPDU.INS == 0x2A)) { // Ignore for command chaining
             proceed = 0;    // Set the flag to 0
             int time = 0;   // Simple time counter
 
