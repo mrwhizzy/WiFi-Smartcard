@@ -33,7 +33,7 @@ wifi_config_t wifiConfig2 = {
         .password = "foobarbaz",
     },
 };
-char IP2[] = "10.42.0.1";
+char IP2[] = "192.168.43.159";
 
 wifi_config_t wifiConfig3 = {
     .sta = {

@@ -219,7 +219,7 @@ begin:
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) != 0) {
             ESP_LOGE(TAG, "... socket connect failed errno: %d", errno);
-            ESP_LOGI(TAG, "Check that the server is running on the other end");
+            ESP_LOGI(TAG, "Check that the server is running at the other end");
             invalidate();   // Invalidate / PIN Reset at a possible end of a connection
             close(sockfd);  // The connection may have failed because there is no server running
             vTaskDelay(5000/portTICK_PERIOD_MS);    // So wait a few seconds
