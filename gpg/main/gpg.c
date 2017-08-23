@@ -36,6 +36,8 @@
 #include "libAPDU.h"
 
 #define PORT 5511       // The default port of this protocol
+// Display the time it takes to complete an operation
+//#define TIMING        // Do not enable unless testing, or a 1 second delay will be added for each operation
 #define PRINTAPDU       // If defined, APDU info is printed, mainly used for debug reasons
 #define PROCEEDBTN      // Do not perform a security operation until the button is pressed
 
@@ -54,6 +56,8 @@ const char *base_path = "/spiflash";
 uint8_t connected = 0;  // Status bit for the WiFi
 uint8_t proceed = 0;    // When the proceed button is pressed, proceed is set
 uint8_t hardRst = 0;    // When the hard reset button is pressed, hardRst is set
+uint16_t timeCount = 0; // How many operations were performed
+uint64_t totalTime = 0; // Total time taken for all operations in milliseconds
 
 void proceedHandle(void* arg) {     // Interrupt handler for the proceed button
     proceed = 1;
@@ -273,7 +277,35 @@ begin:
 #endif
 
         gpio_set_level(GPIO_NUM_25, 1);     // Start processing a command
+
+#ifdef TIMING                               // If TIMING is defined, print the duration of each operation
+        uint32_t startTime, endTime;
+        startTime = system_get_time();      // Yes, it is deprecated, but it's fine for this job
+#endif
+
         process(comAPDU, &output);          // Perform the appropriate operation
+
+#ifdef TIMING
+        endTime = system_get_time();
+        uint32_t duration = endTime - startTime;
+        uint32_t min = duration/60000000;
+        uint32_t timeTmp = duration%60000000;
+        uint32_t sec = timeTmp/1000000;
+        timeTmp = timeTmp%1000000;
+        uint32_t ms = timeTmp/1000;
+        uint32_t us = timeTmp%1000;
+        printf("\t\t(mm:ss:mls:us)    /   Duration: %d us\n", duration);
+        printf("\t\t %02d:%02d:%03d:%03d\n", min, sec, ms, us);
+        if (comAPDU.INS == 0x84 && comAPDU.CLA == 0x00) {   // Get Challenge: 0x84
+            timeCount++;            // Keep track of the number of times a specific operation has been performed
+            totalTime += duration;  // Keep the total time taken in order to calculate an average
+            printf("Number of operations: %d\t\tTotal time: %lld us\t\t", timeCount, totalTime);
+            printf("Average time: %lld\n", totalTime/timeCount);
+        }
+        fflush(stdout);
+
+        vTaskDelay(1000/portTICK_PERIOD_MS);    // To avoid watchdog starvation on repeated operations
+#endif
         gpio_set_level(GPIO_NUM_25, 0);     // End of command processing
 
 #ifdef PRINTAPDU    // Print the response APDU and it's length
