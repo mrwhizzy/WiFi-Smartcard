@@ -1,5 +1,5 @@
 """
-serverPGP.py    22/07/2017
+randTesting.py    22/08/2017
 
 AUTHOR
 
@@ -8,24 +8,36 @@ AUTHOR
 
 SYNOPSIS
 
-    serverPGP.py
+    randTesting.py
 
 DESCRIPTION
 
-    This is a Python implementation of a server that
-    the ESP32 can connect to and perform all of its 
-    supported functions.
+    This is a Python testing program, based on
+    the serverPGP.py. This software is able to
+    send random commands to the ESP32 for testing
+    purposes. This program was used also in order
+    to perform some specific operations repeatedly
+    on the ESP32 in order to measure the time 
+    that was taken in order to complete each 
+    operation.
 """
 import sys
 import time
+import numpy
 import base64
 import threading
 import SocketServer
+from random import randint
 from getpass import getpass
 from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
 from socket import error as SocketError
 
+"""
+When this flag is not set, random data are being sent to the device.
+This will eventually result in trying random PINs and locking the device
+"""
+sanitisedInputs = 1     # When this flag is set
 
 def sendAndGetResponse(cmd):
     global command      # The command APDU
@@ -116,58 +128,55 @@ def getTimeTag(key):
         return "00 "
 
 
-def promptForPass(mesg):
-    while True:
-        pw = getpass(mesg+" or 0 to cancel: ")
-        if (pw == "0"):
-            return 0
-        return pw
-
-
 def promptForKeyType():
-    keyType = -1
-    while True:
-        print "\nPlease enter the type of the key:"
-        print "\t(1) Signature\n\t(2) Decryption\n\t(3) Authentication\n\t(0) Back"
-        try:
-            keyType = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
+    if (sanitisedInputs == 1):
+        keyType = 1
+    else:
+        keyType = randint(1, 3)
 
-        if (0 <= keyType < 4):
-            return keyType
+    return keyType
 
 
 def verify(p2):
-    pw1 = promptForPass("Please enter the password")
-    if (pw1 == 0):
-        return False
+    if (sanitisedInputs == 1):
+        if (p2 == "81 "):
+            pw1 = "123456"
+        elif (p2 == "82 "):
+            pw1 = "123456"
+        elif (p2 == "83 "):
+            pw1 = "12345678"
+        else:
+            return False
+    else:
+        if (p2 == "81 "):
+            pwTmp = numpy.random.randint(255, size=randint(1, 255))
+            pw1 = "".join(map(chr, pwTmp[1:]))
+        elif (p2 == "82 "):
+            pwTmp = numpy.random.randint(255, size=randint(1, 255))
+            pw1 = "".join(map(chr, pwTmp[1:]))
+        elif (p2 == "83 "):
+            pwTmp = numpy.random.randint(255, size=randint(1, 255))
+            pw1 = "".join(map(chr, pwTmp[1:]))
+        else:
+            return False
 
     pw = " ".join("{:02x}".format(ord(c)) for c in pw1) + " "
     command = "00 20 00 " + p2 + '{0:02X}'.format(int(len(pw)/3)) + " " + pw
     if (sendCommand(command) == "90 00"):
-        print "\nSuccessfully verified"
+        print "\tSuccessfully verified"
         return True
     else:
-        print "\nVerification failed"
+        print "\tVerification failed"
         getPWBytes()
         return False
 
 
 def verifySelect():
-    print "\n\t(1) VERIFY"
+    print "(1) VERIFY"
 
     select = -1
     while True:
-        print "Please enter the type of PIN you would like to verify:"
-        print "\t(1) PW1 (mode 81) for PSO:CDS"
-        print "\t(2) PW1 (mode 82) for other commands"
-        print "\t(3) PW3 (mode 83)"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
+        select = randint(0, 3)
 
         inval = False
         if (select == 0):
@@ -190,78 +199,75 @@ def verifySelect():
 
 def changeReferenceData():
     select = -1
-    print "\n\t(2) CHANGE REFERENCE DATA"
+    print "(2) CHANGE REFERENCE DATA"
     while True:
-        print "Please select the password you would like to change:"
-        print "\t(1) Change PW1"
-        print "\t(2) Change PW3"
-        print "\t(0) Back"
         try:
-            select = int(raw_input("Your selection: "))
+            select = randint(1, 2)
         except ValueError:
             pass
 
         if (select == 0):
             return
         elif (select == 1):
-            pw = promptForPass("Please enter the current PW1 password")
-            if (pw == 0):
-                return False
-
+            if (sanitisedInputs == 1):
+                pw = "123456"
+                newPW = "123456"
+            else:
+                pwTmp = numpy.random.randint(255, size=randint(1, 127))
+                pw = "".join(map(chr, pwTmp[1:]))
+                pwTmp = numpy.random.randint(255, size=randint(1, 127))
+                newPW = "".join(map(chr, pwTmp[1:]))
             mode = "81 "
             break
         elif (select == 2):
-            pw = promptForPass("Please enter the current PW3 password")
-            if (pw == 0):
-                return False
-
+            if (sanitisedInputs == 1):
+                pw ="12345678"
+                newPW = "12345678"
+            else:
+                pwTmp = numpy.random.randint(255, size=randint(1, 127))
+                pw = "".join(map(chr, pwTmp[1:]))
+                pwTmp = numpy.random.randint(255, size=randint(1, 127))
+                newPW = "".join(map(chr, pwTmp[1:]))
             mode = "83 "
             break
         else:
             print "Invalid option\n"
         select = -1
 
-    newPW = promptForPass("Please enter the new password")
-    if (pw == 0):
-        return False
-
     pwStr = " ".join("{:02x}".format(ord(c)) for c in pw) + " "
     newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
     data = pwStr + newStr
     command = "00 24 00 " + mode + '{0:02X}'.format(int(len(data)/3)) + " " + data
     if (sendCommand(command) == "90 00"):
-        print "\nOperation completed successfully\n"
+        print "\tOperation completed successfully\n"
         return True
     else:
-        print "\nOperation failed"
+        print "\tOperation failed"
         getPWBytes()
         return False
 
 
 def resetRetryCounter():
     select = -1
-    print "\n\t(3) RESET RETRY COUNTER"
+    print "(3) RESET RETRY COUNTER"
     while True:
-        print "Please select the way you would like to verify:"
-        print "\t(1) Using the Resetting Code (RC)"
-        print "\t(2) Using PW3"
-        print "\t(0) Back"
         try:
-            select = int(raw_input("Your selection: "))
+            select = randint(1, 2)
         except ValueError:
             pass
 
         if (select == 0):
             return
         elif (select == 1):
-            pw = promptForPass("Please enter the resetting code (RC)")
-            if (pw == 0):
-                return False
+            if (sanitisedInputs == 1):
+                pw = "12345678"
+            else:
+                pwTmp = numpy.random.randint(255, size=randint(1, 127))
+                pw = "".join(map(chr, pwTmp[1:]))
 
             mode = "00 "
             break
         elif (select == 2):
-            print "\nYou will need to verify the PW3 PIN"
             if (not (verify("83 "))):
                 return False
 
@@ -271,9 +277,11 @@ def resetRetryCounter():
             print "Invalid option\n"
         select = -1
 
-    newPW = promptForPass("Please enter the new PW1 password")
-    if (newPW == 0):
-        return False
+    if (sanitisedInputs == 1):
+        newPW = "123456"
+    else:
+        pwTmp = numpy.random.randint(255, size=randint(1, 127))
+        newPW = "".join(map(chr, pwTmp[1:]))
 
     newStr = " ".join("{:02x}".format(ord(c)) for c in newPW) + " "
     if (select == 1):
@@ -284,54 +292,23 @@ def resetRetryCounter():
 
     command = "00 2C " + mode + "81 " + '{0:02X}'.format(int(len(data)/3)) + " " + data
     if (sendCommand(command) == "90 00"):
-        print "\nOperation completed successfully\n"
+        print "\tOperation completed successfully\n"
         return True
     else:
-        print "\nOperation failed"
-        getPWBytes()
+        print "\tOperation failed"
         return False
 
 
 def performOperation(head):
     while True:
-        print "Please select the way of input (max. 245 bytes):"
-        print "\t(1) Import from file"
-        print "\t(2) Enter via keyboard"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (select == 0):
-            break
-        elif ((select != 1) and (select != 2)):
-            print "Invalid option\n"
+        if (sanitisedInputs == 1):
+            inpTmp = numpy.random.randint(25, size=randint(1, 245+1))+65
         else:
-            if (select == 1):
-                while True:
-                    filename = raw_input("\nPlease enter the filename: ")
-                    try:
-                        f = open(filename, 'r')
-                        inp = f.read()
-                        if (len(inp) <= 245):
-                            break
-                        else:
-                            print "Input must be <= 245 bytes"
-                    except IOError:
-                        print "No such file or directory"
-
-                f.close()
-            elif (select == 2):
-                while True:
-                    inp = raw_input("Input (max. 245 characters): ")
-                    if (len(inp) <= 245):
-                        break            
-
-            inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
-            command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
-            return sendCommand(command)
-        select = -1
+            inpTmp = numpy.random.randint(255, size=randint(1, 255))
+        inp = "".join(map(chr, inpTmp[1:]))
+        inpS = " ".join("{:02x}".format(ord(c)) for c in inp) + " "
+        command = head + '{0:02X}'.format(int(len(inpS)/3)) + " " + inpS
+        return sendCommand(command)
 
 
 def reverseOp(inp, filename, passwd):
@@ -346,20 +323,20 @@ def reverseOp(inp, filename, passwd):
 
 
 def computeDigSign():
-    print "\nYou will need to verify the PW1 PIN"
     if (not (verify("81 "))):
         return False
 
     select = -1
-    print "\n\tCompute Digital Signature"
+    print "\tCompute Digital Signature"
     resp = performOperation("00 2A 9E 9A ")
     if (resp == "6A 88"):
-        print "Signature key not found\n"
+        print "\tSignature key not found\n"
     elif (resp == "69 83"):
         print "\tOperation Blocked\n"
+    elif (resp == "6F 00"):
+        print "\tUnknown Error\n"
     else:
-        print "Ciphertext: " + resp[:len(resp)-6] + "\n"
-        reverseOp(resp[:len(resp)-6], "private.pem", "12345678")    # Temp hardcoded key
+        print "\tOperation Completed"
 
 
 def sendChain(dataIn, INS):
@@ -384,13 +361,19 @@ def sendChain(dataIn, INS):
 
 
 def decipher():
-    print "\nYou will need to verify the PW1 PIN"
     if (not (verify("82 "))):
         return False
 
-    print "\n\tDecipher"
+    print "\tDecipher"
+    ciphertexts = []
+    ciphertexts.append("cipherTest0")
+    ciphertexts.append("cipherTest1")
+    ciphertexts.append("cipherTest2")
+    ciphertexts.append("cipherTest3")
+    ciphertexts.append("cipherTest4")
+    ciphertexts.append("cipherTest5")
     while True:
-        filename = raw_input("Please enter the filename (enter 0 to cancel): ")
+        filename = ciphertexts[randint(0, 5)]
         if (filename == "0"):
             return
         else: 
@@ -406,23 +389,21 @@ def decipher():
     resp = sendChain(inpS, "2A 80 86 ")
 
     if (resp == "6A 88"):
-        print "Decryption key not found\n"
+        print "\tDecryption key not found\n"
     elif (resp == "69 83"):
         print "\tOperation Blocked\n"
+    elif (resp == "6F 00"):
+        print "\tUnknown Error\n"
     else:
-        print "Decrypted: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
+        print "\tDecrypted: " + bytearray.fromhex(resp[:len(resp)-6]).decode() + "\n"
 
 
 def performSecOp():
     select = -1
-    print "\n\t(4) PERFORM SECURITY OPERATION"
+    print "(4) PERFORM SECURITY OPERATION"
     while True:
-        print "Please select the security operation you would like to perform:"
-        print "\t(1) Compute Digital Signature"
-        print "\t(2) Decipher"
-        print "\t(0) Back"
         try:
-            select = int(raw_input("Your selection: "))
+            select = randint(0, 2)
         except ValueError:
             pass
 
@@ -438,20 +419,20 @@ def performSecOp():
 
 
 def intAuth():
-    print "\nYou will need to verify the PW1 PIN"
     if (not (verify("82 "))):
         return False
 
     select = -1
-    print "\n\t(5) INTERNAL AUTHENTICATE"
+    print "(5) INTERNAL AUTHENTICATE"
     resp = performOperation("00 88 00 00 ")
     if (resp == "6A 88"):
-        print "Authentication key not found\n"
+        print "\tAuthentication key not found\n"
     elif (resp == "69 83"):
         print "\tOperation Blocked\n"
+    elif (resp == "6F 00"):
+        print "\tUnknown Error\n"
     else:
-        print "Ciphertext: " + resp[:len(resp)-6] + "\n"
-        reverseOp(resp[:len(resp)-6], "private.pem", "12345678")    # Temp hardcoded key
+        print "\tOperation Completed"
 
 
 
@@ -483,11 +464,10 @@ def putTime(keyType):           # Put the current timestamp
 
 
 def genAsymKey():
-    print "\nYou will need to verify the PW3 PIN"
     if (not (verify("83 "))):
         return False
 
-    print "\n\t(6) GENERATE ASYMMETRIC KEY"
+    print "(6) GENERATE ASYMMETRIC KEY"
     keyType = promptForKeyType()
     if (keyType == 0):
         return False
@@ -507,15 +487,14 @@ def genAsymKey():
 
 def getChallenge():
     select = -1
-    print "\n\t(7) GET CHALLENGE"
-    length = getByteNumber("Please enter the length of the requested random number")
-
+    print "(7) GET CHALLENGE"
+    length = randint(1, 255)
+    
     if (length == 0):
         return
     else:
         command = "00 84 00 00 " + '{0:02X}'.format(length) + " "
         resp = sendCommand(command)
-        print "\nResponse: "+ resp[:len(resp)-6] + "\n"
 
 
 def getARD():
@@ -526,97 +505,97 @@ def getARD():
 
     tmpLen = int(resp[3]+resp[4], 16)
     offset = 2
-    print "Application Related Data:\n\tApplication ID ...........: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "Application Related Data:\n\tApplication ID ...........: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 2
 
     tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
-    print "\tHistorical Bytes .........: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\tHistorical Bytes .........: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 4
 
     tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
-    print "\tExtended Capabilities ....: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\tExtended Capabilities ....: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 1
 
     tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
-    print "\tAlgorithm Attributes\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\tAlgorithm Attributes\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 1
 
     tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
-    print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 1
 
     tmpLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
-    print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + tmpLen + 2
 
-    print "\tPW1 status bytes\n\t\tPW1 status .......: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\tPW1 status bytes\n\t\tPW1 status .......: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tPW1 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tPW1 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tRC max length ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tRC max length ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tPW3 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tPW3 max length ...: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tPW1 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tPW1 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tRC remaining .....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tRC remaining .....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 1
-    print "\t\tPW3 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
+    #print "\t\tPW3 remaining ....: {}".format(int(resp[offset*3]+resp[offset*3+1], 16))
     offset = offset + 3
 
     tmpLen = 20
-    print "\tKey Fingerprints\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\tKey Fingerprints\n\t\tSignature ........: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 20
-    print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tDecryption .......: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 20
-    print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tAuthentication ...: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 22
 
     tmpLen = 20
-    print "\tCA Fingerprints\n\t\tCA 1 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\tCA Fingerprints\n\t\tCA 1 .............: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 20
-    print "\t\tCA 2 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tCA 2 .............: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 20
-    print "\t\tCA 3 .............: " + resp[offset*3:(offset+tmpLen)*3]
+    #print "\t\tCA 3 .............: " + resp[offset*3:(offset+tmpLen)*3]
     offset = offset + 22
 
     tmpLen = 4
     tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
     tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
     t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-    print "\tKey Generation Times\n\t\tSignature: .......: " + t
+    #print "\tKey Generation Times\n\t\tSignature: .......: " + t
     offset = offset + 4
     tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
     tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
     t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-    print "\t\tDecryption: ......: " + t
+    #print "\t\tDecryption: ......: " + t
     offset = offset + 4
     tStr = resp[offset*3]+resp[offset*3+1]+resp[offset*3+3]+resp[offset*3+4]
     tStr = tStr+resp[offset*3+6]+resp[offset*3+7]+resp[offset*3+9]+resp[offset*3+10]
     t = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(tStr, 16)))
-    print "\t\tAuthentication ...: " + t + "\n"
+    #print "\t\tAuthentication ...: " + t + "\n"
     return True
 
 
 def getLoginData():
     resp = sendCommand("00 CA 00 5E 00") + " "    # GET DATA - Login Data
-    print "\tLogin Data ...............: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+    #print "\tLogin Data ...............: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
 
 
 def getURL():
     resp = sendCommand("00 CA 5F 50 00") + " "    # GET DATA - URL
-    print "\tPublic Key URL ...........: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
+    #print "\tPublic Key URL ...........: " + bytearray.fromhex(resp[:len(resp)-6]).decode()
 
 
 def getDSCnt():
     resp = sendCommand("00 CA 00 7A 00") + " "    # GET DATA - Security Support Template
     dsCnt = int(resp[6]+resp[7]+resp[9]+resp[10]+resp[12]+resp[13], 16)
-    print "\tSignature Counter.........: {}\n".format(dsCnt)
+    #print "\tSignature Counter.........: {}\n".format(dsCnt)
 
 
 def getCRD():
@@ -624,43 +603,27 @@ def getCRD():
     nLen = int(resp[3]+resp[4], 16)
     offset = 2
     name = bytearray.fromhex(resp[offset*3:(offset+nLen)*3]).decode()
-    print "Cardholder Related Data:\n\t\tName: ............: " + name
+    #print "Cardholder Related Data:\n\t\tName: ............: " + name
     offset = offset + nLen + 2
 
     lLen = int(resp[(offset*3)+1]+resp[(offset*3)+2], 16)
     offset = offset + 1
     lang = bytearray.fromhex(resp[offset*3:(offset+lLen)*3]).decode()
-    print "\t\tLanguage prefs ...: " + lang
+    #print "\t\tLanguage prefs ...: " + lang
     offset = offset + lLen + 3
-
-    if (resp[(offset*3)+1] == "1"):
-        print "\t\tSex ..............: Male\n"
-    elif (resp[(offset*3)+1] == "2"):
-        print "\t\tSex ..............: Female\n"
-    else:
-        print "\t\tSex ..............: Not set\n"
 
 
 def getPWBytes():
     resp = sendCommand("00 CA 00 C4 00") + "\n"    # GET DATA - PW Status Bytes
-    print "\tPW1 tries remaining ......: {}".format(int(resp[12] + resp[13]))
-    print "\tRC tries remaining .......: {}".format(int(resp[15] + resp[16]))
-    print "\tPW3 tries remaining ......: {}".format(int(resp[18] + resp[19])) + "\n"
 
 
 def getData():
-    print "\n\t(8) GET DATA"
+    print "(8) GET DATA"
 
     select = -1
     while True:
-        print "Please enter the type of data you would like to get:"
-        print "\t(1) List all available data"
-        print "\t(2) GET Cardholder Certificate"
-        print "\t(3) GET PW Status Bytes"
-        print "\t(4) GET Public Key"
-        print "\t(0) Back"
         try:
-            select = int(raw_input("Your selection: "))
+            select = randint(0, 4)
         except ValueError:
             pass
 
@@ -675,38 +638,35 @@ def getData():
             getCRD()
         elif (select == 2):
             resp = sendCommand("00 CA 7F 21 00") + " "    # GET DATA - Cardholder Certificate
-            print "Cardholder certificate (hex):\n" + resp[:len(resp)-6] + "\n"
         elif (select == 3):
             getPWBytes()                                           # GET DATA - PW Status Bytes
         elif (select == 4):
             keyType = promptForKeyType()
-            if (keyType == 0):
-                break
-
             keyTag = getKeyTag(keyType)
             resp = sendCommand("00 47 81 00 02 " + keyTag + "00 00")
-            print "Modulus (hex): " + resp[9*3:265*3] + "\nExponent (hex): " + resp[267*3:270*3] + "\n"
-        else:
-            print "Invalid option\n"
         select = -1
 
 
 def doPut(mesg, maxInp, tag):
     while True:
-        inp = raw_input("\nPlease enter the " + mesg)
+        if (sanitisedInputs == 1):
+            inpTmp = numpy.random.randint(25, size=randint(1, maxInp+1))+65
+        else:
+            inpTmp = numpy.random.randint(255, size=randint(1, 255))            
+        inp = "".join(map(chr, inpTmp[1:]))
         if (len(inp) <= maxInp):
             break
 
     iStr = " ".join("{0:02x}".format(ord(c)) for c in inp).upper() + " "
     if (sendCommand("00 DA " + tag + getLen(iStr) + iStr) == "90 00"):
-        print "Operation completed successfully\n"
+        print "\tOperation completed successfully\n"
     else:
-        print "Operation failed\n"
+        print "\tOperation failed\n"
 
 
 def importKey():
     while True:
-        filename = raw_input("\nPlease enter the private key filename (e.g. private.pem): ")
+        filename = "private.pem"
         try:
             f = open(filename, 'r')
             break
@@ -714,7 +674,7 @@ def importKey():
             print "No such file or directory"
 
     while True:
-        pw = getpass("Please enter the key password (optional): ")
+        pw = "12345678"
         try:
             r = RSA.importKey(f.read(), passphrase = pw)
             f.close()
@@ -780,100 +740,68 @@ def importKey():
 
 
 def putData():
-    print "\nYou will need to verify the PW3 PIN"
     if (not (verify("83 "))):
         return False
 
-    select = -1
-    print "\n\t(9) PUT DATA"
-    while True:
-        print "Please enter the type of data you would like to put:"
-        print "\t(1) Name"
-        print "\t(2) Login Data"
-        print "\t(3) Language Preferences"
-        print "\t(4) Sex"
-        print "\t(5) URL"
-        print "\t(6) Cardholder Certificate"
-        print "\t(7) PW Status Bytes"
-        print "\t(8) Resetting Code"
-        print "\t(9) Import Key"
-        print "\t(0) Back"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
-        if (select == 0):
-            return
-        elif (select == 1):
-            doPut("name (Max. 39 characters): ", 39, "00 5B ")
-        elif (select == 2):
-            doPut("login data (Max. 254 characters): ", 254, "00 5E ")
-        elif (select == 3):
-            doPut("language preferences (Max. 8 characters): ", 8, "5F 2D ")
-        elif (select == 4):
-            while True:
-                inp = raw_input("\nPlease enter the sex (M)ale or (F)emale): ")
-                if (inp == "M" or inp == "m" or inp.upper() == "MALE"):
-                    sex = "31 "
-                    break
-                elif (inp == "F" or inp == "f" or inp.upper() == "FEMALE"):
-                    sex = "32 "
-                    break
-
-            if (sendCommand("00 DA 5F 35 01 " + sex) == "90 00"):
-                print "Operation completed successfully\n"
-            else:
-                print "Operation failed\n"
-        elif (select == 5):
-            doPut("URL (Max. 254 characters): ", 254, "5F 50 ")
-        elif (select == 6):
-            doPut("cardholder certificate (Max. 1216 characters): ", 1216, "7F 21 ")
-        elif (select == 7):
-            while True:
-                inp = raw_input("\nPlease enter PW1 status (0 or 1): ")
-                if (int(inp) == 0):
-                    val = "00 "
-                    break
-                elif (int(inp) == 1):
-                    val = "01 "
-                    break
-
-            if (sendCommand("00 DA 00 C4 01 " + val) == "90 00"):
-                print "Operation completed successfully\n"
-            else:
-                print "Operation failed\n"
-        elif (select == 8):
-            while True:
-                print "\nPlease enter the resetting code (RC): "
-                while True:
-                    pw1 = getpass("Please enter the password (Min. 8 char./Max. 127 char. or empty): ")
-                    if (len(pw1) == 0 or (len(pw1) >= 8 and len(pw1) <= 127)):
-                        break
-
-                pw2 = getpass("Please confirm the password: ")
-                if (pw1 == pw2):
-                    break
-                else:
-                    print "The passwords do not match"
-
-            pStr = " ".join("{0:02x}".format(ord(c)) for c in pw1).upper() + " "
-            if (sendCommand("00 DA 00 D3 " + getLen(pStr) + pStr) == "90 00"):
-                print "Operation completed successfully\n"
-            else:
-                print "Operation failed\n"
-        elif (select == 9):
-            if (importKey()):
-                print "The key was imported successfully\n"
-            else:
-                print "Key import failed\n"
+    print "(9) PUT DATA"
+    select = randint(1, 9)
+    if (select == 0):
+        return
+    elif (select == 1):
+        doPut("name (Max. 39 characters): ", 39, "00 5B ")
+    elif (select == 2):
+        doPut("login data (Max. 254 characters): ", 254, "00 5E ")
+    elif (select == 3):
+        doPut("language preferences (Max. 8 characters): ", 8, "5F 2D ")
+    elif (select == 4):
+        if (randint(0, 1) == 0):
+            sex = "31 "
         else:
-            print "Invalid option\n"
-        select = -1
+            sex = "32 "
+
+        if (sendCommand("00 DA 5F 35 01 " + sex) == "90 00"):
+            print "\tOperation completed successfully\n"
+        else:
+            print "\tOperation failed\n"
+    elif (select == 5):
+        doPut("URL (Max. 254 characters): ", 254, "5F 50 ")
+    elif (select == 6):
+        doPut("cardholder certificate (Max. 1216 characters): ", 1216, "7F 21 ")
+    elif (select == 7):
+        while True:
+            inp = randint(0, 1)
+            if (int(inp) == 0):
+                val = "00 "
+                break
+            elif (int(inp) == 1):
+                val = "01 "
+                break
+
+        if (sendCommand("00 DA 00 C4 01 " + val) == "90 00"):
+            print "\tOperation completed successfully\n"
+        else:
+            print "\tOperation failed\n"
+    elif (select == 8):
+        print "\tRESETTING CODE"
+        pw1 = "12345678"
+
+        pStr = " ".join("{0:02x}".format(ord(c)) for c in pw1).upper() + " "
+        if (sendCommand("00 DA 00 D3 " + getLen(pStr) + pStr) == "90 00"):
+            print "Operation completed successfully\n"
+        else:
+            print "Operation failed\n"
+    elif (select == 9):
+        print "\tIMPORT KEY"
+        if (importKey()):
+            print "\tThe key was imported successfully\n"
+        else:
+            print "\tKey import failed\n"
+    else:
+        print "Invalid option\n"
 
 
 def handleTerminated():
-    print "\n\t(10) TERMINATE"
+    print "(10) TERMINATE"
     select = -1
     while True:
         print "Please enter the type of operation you would like to perform:"
@@ -889,10 +817,10 @@ def handleTerminated():
             return
         elif (select == 1):
             if (sendCommand("00 44 00 00 00") == "90 00"):
-                print "Operation completed successfully\n"
+                print "\tOperation completed successfully\n"
                 return
             else:
-                print "Operation failed\n"
+                print "\tOperation failed\n"
         else:
             return
         select = -1
@@ -913,25 +841,18 @@ def getByteNumber(mesg):
 
 
 def setPinRetries():
-    print "\nYou will need to verify the PW3 PIN"
     if (not (verify("83 "))):
         return False
 
-    print "\n\t(13) SET RETRIES"
-    p1 = getByteNumber("Please enter the number of retries for PW1")
-    if (p1 == 0):
-        return
-    rc = getByteNumber("Please enter the number of retries for the resetting code (RC)")
-    if (rc == 0):
-        return
-    p3 = getByteNumber("Please enter the number of retries for PW3")
-    if (p3 == 0):
-        return
+    print "(13) SET RETRIES"
+    p1 = 3
+    rc = 3
+    p3 = 3
     c = "00 F2 00 00 03" + '{0:02X}'.format(p1) + '{0:02X}'.format(rc) + '{0:02X}'.format(p3) + " "
     if (sendCommand(c) == "90 00"):
-        print "\nOperation completed successfully\n"
+        print "\tOperation completed successfully\n"
     else:
-        print "\nOperation failed\n"
+        print "\tOperation failed\n"
 
 
 class handleConnection(SocketServer.BaseRequestHandler):
@@ -980,7 +901,6 @@ if __name__ == '__main__':
     condCommand = threading.Condition()
     condResponse = threading.Condition()
 
-    select = -1
     while True:
         newCommand = 0
         processing = 0
@@ -991,31 +911,7 @@ if __name__ == '__main__':
             if (getARD() == True):
                 break
 
-        getLoginData()
-        getURL()
-        getDSCnt()
-        getCRD()
-
-        print "Please enter the type of operation you would like to perform:"
-        print "\t (1) VERIFY"
-        print "\t (2) CHANGE REFERENCE DATA"
-        print "\t (3) RESET RETRY COUNTER"
-        print "\t (4) PERFORM SECURITY OPERATION"
-        print "\t (5) INTERNAL AUTHENTICATE"
-        print "\t (6) GENERATE ASYMMETRIC KEY"
-        print "\t (7) GET CHALLENGE"
-        print "\t (8) GET DATA"
-        print "\t (9) PUT DATA"
-        print "\t(10) TERMINATE"
-        print "\t(11) ACTIVATE"
-        print "\t(12) GET VERSION"
-        print "\t(13) SET PIN RETRIES"
-        print "\t(0)  QUIT"
-        try:
-            select = int(raw_input("Your selection: "))
-        except ValueError:
-            pass
-
+        select = randint(1, 13)
         if (select == 0):
             print "\n\t(0) QUIT\n"
             sys.exit()      # Terminate execution
@@ -1031,9 +927,9 @@ if __name__ == '__main__':
             intAuth()
         elif (select == 6):
             if (genAsymKey()):
-                print "Key generated successfully"
+                print "\tKey generated successfully"
             else:
-                print "Key generation failed"
+                print "\tKey generation failed"
         elif (select == 7):
             getChallenge()
         elif (select == 8):
@@ -1042,19 +938,18 @@ if __name__ == '__main__':
             putData()
         elif (select == 10):
             if (sendCommand("00 E6 00 00 00") == "90 00"):
-                print "Operation completed successfully\n"
+                print "(10) TERMINATE\n\tOperation completed successfully\n"
             else:
-                print "Operation failed\n"
+                print "(10) TERMINATE\n\tOperation failed\n"
         elif (select == 11):
-            print "\n\t(11) ACTIVATE"
+            print "(11) ACTIVATE"
             if (sendCommand("00 44 00 00 00") == "90 00"):
-                print "Operation completed successfully\n"
+                print "\tOperation completed successfully\n"
             else:
-                print "Operation failed\n"
+                print "\tOperation failed\n"
         elif (select == 12):
-            print "\n\t(12) GET VERSION"
+            print "(12) GET VERSION"
             resp = sendCommand("00 F1 00 00 00")
-            print "Version: " + resp[:len(resp)-6] + "\n"
+            print "\tVersion: " + resp[:len(resp)-6] + "\n"
         elif (select == 13):
             setPinRetries()
-        select = -1
