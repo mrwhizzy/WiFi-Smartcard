@@ -20,4 +20,4 @@ Although the Virtual Smart Card is a software emulator, you can use
 [pcsc-relay](http://frankmorgner.github.io/vsmartcard/pcsc-relay/README.html)
 to make it accessible to an external contact-less smart card reader.
 
-Please refer to [our project's website](http://frankmorgner.github.io/vsmartcard/virtualsmartcard/README.html) for more information.
+Please refer to [the project's website](http://frankmorgner.github.io/vsmartcard/virtualsmartcard/README.html) for more information.
